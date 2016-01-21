@@ -11,7 +11,7 @@ project_id = arcpy.GetParameterAsText(3)
 capacity_exp = "xarea(  !PIPESHAPE! , !Diameter!, !Height!, !Width! ) * (1.49/getMannings(!PIPESHAPE!, !Diameter!)) * math.pow(hydR( !PIPESHAPE! , !Diameter!, !Height!, !Width! ) , 0.667) * math.pow( !Slope!/100, 0.5 )"
 velocity_exp = "(1.49/getMannings(!PIPESHAPE!, !Diameter!)) * math.pow(hydR( !PIPESHAPE! , !Diameter!, !Height!, !Width! ) , 0.667) * math.pow( !Slope!/100, 0.5 )"
 travel_time_exp = "!shape.length!/ !Velocity! /60"
-#default_N = "N" #this is stupid if i really need to do this to get things to work
+min_slope_exp = "minSlope(!Slope!)"
 
 code_block = """def getMannings( shape, diameter ):
   n = 0.015 #default value
@@ -32,6 +32,14 @@ def  xarea( shape, diameter, height, width ):
     return 0.5105* math.pow((height/12),2 )
   elif (shape == "BOX" or shape == "BOX SHAPE"):
     return height*width/144
+
+def  minSlope( slope ):
+  
+  #replaces null slope value with the assumed minimum 0.01%
+  if slope == None:
+    return 0.01
+  else:
+    return slope
 	
 def  hydR(shape, diameter, height, width ):
   
@@ -64,6 +72,7 @@ for drainage_area in drainage_areas_cursor:
 	if pipes_already_studied:
 		arcpy.AddWarning("Skipped pipes in Study Area " + study_area_id + ".")
 		continue #skip this iteration because pipes with this study area ID 
+	arcpy.AddWarning("Working on sewers in Study Area " + study_area_id + ".")
 	
 	#generate temp Random DA and sewer layer name 
 	DA = "DA_" + ''.join(random.choice('0123456789ABCDEF') for i in range(6)) 
@@ -79,6 +88,7 @@ for drainage_area in drainage_areas_cursor:
 	#MAKE SCHEMA MATCH BETWEEN THE TEMP SEWERS LAYER AND THE TARGET STUDY SEWERS LAYER
 		#ultimately this should maybe be less hardcoded - loop through schema of each and add/delete columns accordingly
 	#delete unnecessary fields from drainage area
+	arcpy.AddWarning("\t matching schema")
 	arcpy.DeleteField_management(in_table=sewers, drop_field="Join_Count;TARGET_FID;Peak_Runoff;TimeOfConcentration;ConnectionPoint;Intsensity;StickerLink_1;Capacity;PipeLength;Size;InstallDate;Runoff_Coefficient")
 	
 	#make joined_sewers schema match the study sewers schema
@@ -89,19 +99,25 @@ for drainage_area in drainage_areas_cursor:
 	arcpy.AddField_management(in_table = sewers, field_name = "TravelTime_min", field_type = "DOUBLE")
 	arcpy.AddField_management(in_table = sewers, field_name = "Tag", field_type = "TEXT", field_length = "50")
 	
-	
-	#run calculations on temp sewers layer to populate the capacity, velocity, and travel time fields
+	arcpy.AddWarning("\t running hydraulic calculations") #probably would be more efficient to do this once after all have been appended
+	#run calculations on temp sewers layer to populate the default slope (if null), capacity, velocity, and travel time fields
 	# Execute CalculateField 
+	arcpy.CalculateField_management(sewers, "Slope", min_slope_exp, "PYTHON_9.3", code_block)
 	arcpy.CalculateField_management(sewers, "Capacity", capacity_exp, "PYTHON_9.3", code_block)
 	arcpy.CalculateField_management(sewers, "Velocity", velocity_exp, "PYTHON_9.3", code_block)
 	arcpy.CalculateField_management(sewers, "TravelTime_min", travel_time_exp, "PYTHON_9.3", code_block)
 	
+	
 	#default values for symbology
 	arcpy.CalculateField_management(sewers, "TC_Path", "'N'", "PYTHON_9.3")
 	arcpy.CalculateField_management(sewers, "StudySewer", "'N'", "PYTHON_9.3")
+
 	
+	arcpy.AddWarning("\t appending sewers to Studied Pipes layer")
 	#append the sewers copied from the waste water mains layer to the studied sewers layer
 	arcpy.Append_management(inputs = sewers, target = study_pipes, schema_type = "TEST", field_mapping = "#", subtype = "#")
 	
 	arcpy.Delete_management(sewers)
 	arcpy.Delete_management(DA)
+	
+	arcpy.AddWarning("Finished Study Area " + study_area_id + ". \n")
