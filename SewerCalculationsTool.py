@@ -6,15 +6,12 @@
 
 # Import arcpy module
 import arcpy
-#import ctypes
 from arcpy import env
 
 #grab the input drainage area layer and pipes of interest
 DAs = arcpy.GetParameterAsText(0) 
 all_study_pipes = arcpy.GetParameterAsText(1)
 project_id = arcpy.GetParameterAsText(2)
-
-#env.workspace = inWorkspace
 
 #iterate through each DA within a given project and sum the TCs with their DrainageArea_ID
 drainage_areas_cursor = arcpy.UpdateCursor(DAs, where_clause = "Project_ID = " + project_id)

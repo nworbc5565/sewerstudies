@@ -12,9 +12,9 @@ project_id = arcpy.GetParameterAsText(3)
 code_block = CodeBlocks.code_block 
 
 #set code blocks
-capacity_exp = "xarea(  !PIPESHAPE! , !Diameter!, !Height!, !Width! ) * (1.49/getMannings(!PIPESHAPE!, !Diameter!)) * math.pow(hydR( !PIPESHAPE! , !Diameter!, !Height!, !Width! ) , 0.667) * math.pow( !Slope!/100, 0.5 )"
-velocity_exp = "(1.49/getMannings(!PIPESHAPE!, !Diameter!)) * math.pow(hydR( !PIPESHAPE! , !Diameter!, !Height!, !Width! ) , 0.667) * math.pow( !Slope!/100, 0.5 )"
-travel_time_exp = "!shape.length!/ !Velocity! /60"
+capacity_exp = "round( xarea(  !PIPESHAPE! , !Diameter!, !Height!, !Width! ) * (1.49/getMannings(!PIPESHAPE!, !Diameter!)) * math.pow(hydR( !PIPESHAPE! , !Diameter!, !Height!, !Width! ) , 0.667) * math.pow( !Slope!/100, 0.5 ), 2)"
+velocity_exp = "round( (1.49/getMannings(!PIPESHAPE!, !Diameter!)) * math.pow(hydR( !PIPESHAPE! , !Diameter!, !Height!, !Width! ) , 0.667) * math.pow( !Slope!/100, 0.5 ) , 2)"
+travel_time_exp = "round( !shape.length!/ !Velocity! /60 , 2)"
 min_slope_exp = "minSlope(!Slope!)"
 
 
@@ -53,6 +53,8 @@ arcpy.AddField_management(in_table = sewers, field_name = "Capacity", field_type
 arcpy.AddField_management(in_table = sewers, field_name = "Velocity", field_type = "DOUBLE")
 arcpy.AddField_management(in_table = sewers, field_name = "TravelTime_min", field_type = "DOUBLE")
 arcpy.AddField_management(in_table = sewers, field_name = "Tag", field_type = "TEXT", field_length = "50")
+arcpy.AddField_management(in_table = sewers, field_name = "Hyd_Study_Notes", field_type = "TEXT", field_length = "200")
+
 
 arcpy.AddMessage("\t running hydraulic calculations")
 #run calculations on temp sewers layer to populate the default slope (if null), capacity, velocity, and travel time fields
@@ -74,7 +76,6 @@ arcpy.Append_management(inputs = sewers, target = study_pipes, schema_type = "TE
 arcpy.Delete_management(sewers)
 arcpy.Delete_management(DAs_temp)
 
-arcpy.AddMessage("Finished\n")
 	
 	
 
