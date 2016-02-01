@@ -1,3 +1,5 @@
+#HYDROLOGY CALCS
+
 #With pipe data that has already been associated with a drainage area and given TC
 #and study sewer tags, this module computes tc, capacity, intensity, and peak runoff
 #for each drainage study area. 
@@ -53,15 +55,15 @@ for drainage_area in drainage_areas_cursor:
 	C = drainage_area.getValue("Runoff_Coefficient")
 	A = drainage_area.getValue("SHAPE_Area") / 43560
 	I = 116 / ( tc + 17)
-	peak_runoff = C * I * A
+	peak_runoff =  C * I * A
 	
 	#set row values and update row
-	drainage_area.setValue("Capacity", capacity)
-	drainage_area.setValue("TimeOfConcentration", tc)
+	drainage_area.setValue("Capacity", round(capacity, 2))
+	drainage_area.setValue("TimeOfConcentration", round(tc, 2))
 	drainage_area.setValue("StickerLink", sticker_link)
 	drainage_area.setValue("InstallDate", intall_year)
-	drainage_area.setValue("Intsensity", I) #NOTE -> spelling error in field name
-	drainage_area.setValue("Peak_Runoff", peak_runoff)
+	drainage_area.setValue("Intsensity", round(I, 2)) #NOTE -> spelling error in field name
+	drainage_area.setValue("Peak_Runoff", round(peak_runoff, 2))
 	drainage_areas_cursor.updateRow(drainage_area)
 	
 	#print(study_area_id + " " + repr(tc) + " " + repr(capacity) + " " + repr(sticker_link) + "\n")
