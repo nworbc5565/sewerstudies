@@ -34,7 +34,7 @@ for drainage_area in drainage_areas_cursor:
 	
 	
 	#CALCULATIONS ON STUDY PIPES
-	capacity = 999999 #set the initial capacity, find the min value
+	capacity = 999999.00 #set the initial capacity, find the min value
 	sticker_link = None #find the study pipe sticker link
 	intall_year = None #find the install year for the study pipe
 	study_pipes = arcpy.UpdateCursor(all_study_pipes, where_clause = "StudySewer = 'Y'") #reset the cursor 
@@ -48,7 +48,7 @@ for drainage_area in drainage_areas_cursor:
 				intall_year = pipe.getValue("Year_Installed")
 			
 			#check and replace if the current row capacity is less than the capacity 
-			capacity = min(capacity, pipe.getValue("Capacity"))
+			capacity = float(min(capacity, pipe.getValue("Capacity"))  or 0) #the 'float or 0' handles null values
 			
 	
 	#RUNOFF CALCULATIONS
