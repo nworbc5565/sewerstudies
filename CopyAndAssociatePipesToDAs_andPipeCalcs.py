@@ -48,8 +48,8 @@ arcpy.AddField_management(in_table = sewers, field_name = "Hyd_Study_Notes", fie
 
 
 #run calculations on the temporary pipe scope, apply default flags this time
-#temp_pipes_cursor = arcpy.UpdateCursor(sewers)
-#HHCalculations.runCalcs(temp_pipes_cursor, applyDefaultFlags = True)
+temp_pipes_cursor = arcpy.UpdateCursor(sewers)
+HHCalculations.applyDefaultFlags(temp_pipes_cursor)
 
 
 #append the sewers copied from the waste water mains layer to the studied sewers layer

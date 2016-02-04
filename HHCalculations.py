@@ -4,13 +4,23 @@ import arcpy
 from arcpy import env
 import math
 
+# =================
+# DATA CONNECTIONS
+# =================
+
+geodb = r"\\PWDHQR\Data\Planning & Research\Linear Asset Management Program\Water Sewer Projects Initiated\03 GIS Data\Hydraulic Studies\Small_Sewer_Capacity.gdb"
+study_pipes = geodb + r"\StudiedWasteWaterGravMains"
+study_areas = geodb + r"\Small_Sewer_Drainage_Areas"
+
+
+# ====================
+# HYDRUALIC EQUATIONS
+# ====================
 
 #define default hydraulic params
 default_min_slope = 0.01 # percent - assumed when slope is null
 default_TC_slope = 5.0 # percent - conservatively assumed for travel time calculation when slope
 
-
-#define hydraulic equations
 def getMannings( shape, diameter ):
 	n = 0.015 #default value
 	if ((shape == "CIR" or shape == "CIRCULAR") and (diameter <= 24) ):
@@ -53,7 +63,7 @@ def minSlopeRequired (shape, diameter, height, width, peakQ) :
 	Rh = hydraulicRadius(shape, diameter, height, width )
 	
 	s =  math.pow((n * peakQ) / ( 1.49 * A * math.pow(Rh, 0.667) ), 2)
-	return s
+	return s*100 #percent
 	
 def determineSymbologyTag(missingData, isTC, isSS, calculatedSlope, minSlopeAssumed):
 	
@@ -79,9 +89,112 @@ def checkPipeYN (pipeValue):
 	if (pipeValue == "Y"): return True
 	else: return False
 	
+def applyDefaultFlags(study_pipes_cursor):
+	
+	for pipe in study_pipes_cursor:
+		#during the first run through, should apply these default flags, and skip all other calcs
+		pipe.setValue("TC_Path", "N")
+		pipe.setValue("StudySewer", "N")
+		study_pipes_cursor.updateRow(pipe)
+	
+	del study_pipes_cursor
+
+def minimumCapacityStudySewer(studypipes, study_area_id):
+	#Return the minimum study sewer capacity in a given study area
+	
+	#search cursor on study sewers in ascending order on capacity
+	where = "StudyArea_ID = '" + study_area_id + "' AND StudySewer = 'Y'"
+	fs ="Capacity; OBJECTID; STICKERLINK; Year_Installed; PIPESHAPE; Diameter; Height; Width" #fields to pull
+	pipesCursor = arcpy.SearchCursor(studypipes, where_clause = where, fields=fs, sort_fields="Capacity A")
+	
+	#return first value, being the minimum capacity
+	#capacity = 0.0
+	#id = "null"
+	for pipe in pipesCursor:
+		capacity 		= pipe.getValue("Capacity")
+		id 				= pipe.getValue("OBJECTID")
+		sticker_link 	= pipe.getValue("STICKERLINK")
+		intall_year 	= pipe.getValue("Year_Installed")
+		D 				= pipe.getValue("Diameter")
+		H 				= pipe.getValue("Height")
+		W 				= pipe.getValue("Width")
+		Shape 			= pipe.getValue("PIPESHAPE")
+		continue #move on after first iteration
+	
+	del pipesCursor
+	return {'capacity':capacity, 'id':id, 'sticker_link':sticker_link, 'intall_year':intall_year, 'D':D, 'H':H, 'W':W, 'Shape':Shape}
+		
+
+
+# ====================
+# HYDROLOGIC EQUATIONS
+# ====================
+
+def timeOfConcentration(studypipes, study_area_id):
+	#Return the time of concentration in a given study area	
+	#search cursor on study sewers in ascending order on capacity
+	where = "StudyArea_ID = '" + study_area_id + "' AND TC_Path = 'Y'"
+	pipesCursor = arcpy.SearchCursor(studypipes, where_clause = where, fields="TravelTime_min; OBJECTID")
+	
+	
+	tc = 3.0000 #set the initial tc to 3 minutes
+	for pipe in pipesCursor:
+		#print(pipe.getValue("TravelTime_min"))
+		tc += float(pipe.getValue("TravelTime_min") or 0) #the 'float or 0' handles null values
+	
+	del pipesCursor
+	return round(tc, 2)
+		
+		
+def phillyStormPeak (tc, area, C):
+
+	#computes peak based on TC, Philly intensity, runoff C, and area in acres
+	I = 116 / ( tc + 17)
+	return round(C * I * area, 2) #CFS
+
+	
+#iterate through each DA within a given project and sum the TCs with their DrainageArea_ID
+#drainage_areas_cursor = arcpy.UpdateCursor(DAs, where_clause = "Project_ID = " + project_id)
+def runHydrology(drainage_areas_cursor):
+	
+	for drainage_area in drainage_areas_cursor:
+		
+		#work with each study area and determine the pipe calcs based on study area id
+		study_area_id = drainage_area.getValue("StudyArea_ID")
+		
+		#CALCULATIONS ON TC PATH PIPES
+		tc = timeOfConcentration(study_pipes, study_area_id)
+				
+		#find limiting pipe in study area
+		limitingPipe =minimumCapacityStudySewer(study_pipes, study_area_id)
+		capacity = limitingPipe['capacity']
+		
+		
+		#RUNOFF CALCULATIONS
+		C = drainage_area.getValue("Runoff_Coefficient")
+		A = drainage_area.getValue("SHAPE_Area") / 43560
+		I = 116 / ( tc + 17)
+		peak_runoff =  C * I * A
+		
+		#replacement pipe characteristics
+		minimumGrade = minSlopeRequired(limitingPipe['Shape'], limitingPipe['D'], limitingPipe['H'], limitingPipe['W'], peak_runoff) 
+		
+		#set row values and update row
+		drainage_area.setValue("Capacity", limitingPipe['capacity'])
+		drainage_area.setValue("TimeOfConcentration", tc)
+		drainage_area.setValue("StickerLink", limitingPipe['sticker_link'])
+		drainage_area.setValue("InstallDate", limitingPipe['intall_year'])
+		drainage_area.setValue("Intsensity", round(I, 2)) #NOTE -> spelling error in field name
+		drainage_area.setValue("Peak_Runoff", round(peak_runoff, 2))
+		drainage_area.setValue("MinimumGrade", round(minimumGrade, 4))
+		drainage_areas_cursor.updateRow(drainage_area)
+		
+
+	del drainage_areas_cursor,
+	
 	
 #iterate through pipes and run calcs
-def runCalcs (study_pipes_cursor, applyDefaultFlags = False):
+def runCalcs (study_pipes_cursor):
 
 	for pipe in study_pipes_cursor:
 		
@@ -125,11 +238,7 @@ def runCalcs (study_pipes_cursor, applyDefaultFlags = False):
 		
 		pipe.setValue("Slope_Used", round(float(S), 2))
 		
-		if applyDefaultFlags:
-			#during the first run through, should apply these default flags
-			pipe.setValue("TC_Path", "N")
-			pipe.setValue("StudySewer", "N")
-			
+		
 		
 		# check if any required data points are null, and skip accordingly
 		#logic -> if (diameter or height exists) and (if Shape is not UNK), then enough data for calcs
@@ -168,8 +277,6 @@ def runCalcs (study_pipes_cursor, applyDefaultFlags = False):
 		
 		
 		#apply symbology tag
-		#if (TC == "Y"): isTC = True
-		#if (ss == "Y"): isSS = True
 		theflag = determineSymbologyTag(missingData, isTC, isSS, calculatedSlope, minSlopeAssumed)
 		pipe.setValue("Tag", str(theflag))
 
