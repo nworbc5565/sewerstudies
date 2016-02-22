@@ -13,6 +13,7 @@ def unique_values(table, field):
 	#returns list of unique values in a given field, in a table
 	with arcpy.da.SearchCursor(table, [field]) as cursor:
 		return sorted({row[0] for row in cursor})
+
 		
 #unique list of StudyArea_IDs found in studied sewers 
 #tuple, and replace used to reformat the python list to an SQL friendly string
@@ -34,7 +35,8 @@ arcpy.SpatialJoin_analysis(all_pipes, join_features = DAs_temp, out_feature_clas
 #ultimately this should maybe be less hard-coded - loop through schema of each and add/delete columns accordingly
 #delete unnecessary fields from drainage area
 arcpy.AddMessage("\t matching schema")
-arcpy.DeleteField_management(in_table=sewers, drop_field="Join_Count;TARGET_FID;Peak_Runoff;TimeOfConcentration;ConnectionPoint;Intsensity;StickerLink_1;Capacity;PipeLength;Size;InstallDate;Runoff_Coefficient;MinimumGrade")
+df = "Join_Count;TARGET_FID;Peak_Runoff;TimeOfConcentration;ConnectionPoint;Intsensity;StickerLink_1;Capacity;PipeLength;Size;InstallDate;Runoff_Coefficient;MinimumGrade;ReplacementSize;Study_Comments"
+arcpy.DeleteField_management(in_table=sewers, drop_field=df)
 
 #make joined_sewers schema match the study sewers schema
 arcpy.AddField_management(in_table = sewers, field_name = "TC_Path", field_type = "TEXT", field_precision = "#", field_scale = "#", field_length = "1", field_alias = "#", field_is_nullable = "NULLABLE", field_is_required = "NON_REQUIRED", field_domain = "#")
