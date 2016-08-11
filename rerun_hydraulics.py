@@ -1,6 +1,7 @@
 #Calculated or recalculate hydraulic calcs for a given Project ID 
 
 import HHCalculations
+import HydraulicStudyGeneralTools
 import arcpy
 from arcpy import env
 
@@ -29,12 +30,15 @@ elif study_area_id is not None and study_area_id != "":
 	#use the study ID as scope, i.e. run calcs on pipes only in a given study area
 	study_pipes_cursor 		= arcpy.UpdateCursor(study_pipes, where_clause = "StudyArea_ID = '" + study_area_id + "'")
 	drainage_areas_cursor 	= arcpy.UpdateCursor(study_areas, where_clause = "StudyArea_ID = '" + study_area_id + "'")
-	arcpy.AddMessage("\t running calcs on Study Area ID = " + str(study_area_id))
-
-
+	
+	
+	#grab the project id 
+	project_id = study_area_id[:study_area_id.find("_")]
+	arcpy.AddMessage("\t running calcs on Study Area ID = " + str(study_area_id) + "/n/t" + "project_id = " + project_id)
 
 #run calculations on the selected pipe scope
 HHCalculations.runCalcs(study_pipes_cursor)
 HHCalculations.runHydrology(drainage_areas_cursor)
-
+if project_id is not None and project_id != "":
+	HydraulicStudyGeneralTools.updateDAIndex(project_id)
 

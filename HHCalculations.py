@@ -3,6 +3,7 @@
 import arcpy
 from arcpy import env
 import math
+import HydraulicStudyGeneralTools
 
 # =================
 # DATA CONNECTIONS
@@ -60,15 +61,25 @@ def hydraulicRadius(shape, diameter, height, width ):
 
 def minSlopeRequired (shape, diameter, height, width, peakQ) :
 	
+	minV = 2.5 #ft/s
+	maxV = 15.0 #ft/s
+	
 	try:
 		n = getMannings(shape, diameter)
 		A = xarea(shape, diameter, height, width)
 		Rh = hydraulicRadius(shape, diameter, height, width )
 		
-		s =  math.pow((n * peakQ) / ( 1.49 * A * math.pow(Rh, 0.667) ), 2)
-		s = math.ceil(s*1000.0)/1000.0 #round up to nearest 10th of a percent
+		s =  math.pow( (n * peakQ) / ( 1.49 * A * math.pow(Rh, 0.667) ), 2)
+		s = math.ceil(s*10000.0)/10000.0 #round up to nearest 100th of a percent
 		
-		return round(s*100.0, 1) #percent, round here to fix weird floating point inaccuracy
+		s_min_v = math.pow( (n*minV) / (1.49 * math.pow(Rh, 0.667) ) , 2) #lower bound slope based on minimum pipe velocity
+		s_max_v = math.pow( (n*maxV) / (1.49 * math.pow(Rh, 0.667) ) , 2) #upper bound slope based on maximum pipe velocity
+		
+		#limit slope to bounds based on settling and scouring velocities
+		s = max(s, s_min_v)
+		s = min(s, s_max_v)
+		
+		return round(s*100.0, 2) #percent, round here to fix weird floating point inaccuracy
 		
 	except TypeError:
 		arcpy.AddWarning("Type error on pipe ")
@@ -121,6 +132,8 @@ def checkPipeYN (pipeValue):
 def applyDefaultFlags(study_pipes_cursor):
 	
 	for pipe in study_pipes_cursor:
+		
+		print(pipe.getValue("OBJECTID"))
 		#during the first run through, should apply these default flags, and skip all other calcs
 		pipe.setValue("TC_Path", "N")
 		pipe.setValue("StudySewer", "N")
@@ -134,13 +147,16 @@ def minimumCapacityStudySewer(studypipes, study_area_id):
 	
 	#search cursor on study sewers in ascending order on capacity
 	where = "StudyArea_ID = '" + study_area_id + "' AND StudySewer = 'Y'"
-	fs ="Capacity; OBJECTID; STICKERLINK; Year_Installed; PIPESHAPE; Diameter; Height; Width;Slope_Used;LABEL" #fields to pull
-	pipesCursor = arcpy.SearchCursor(studypipes, where_clause = where, fields=fs, sort_fields="Capacity D")
+	fs ="Capacity; OBJECTID; STICKERLINK; Year_Installed; PIPESHAPE; Diameter; Height; Width;Slope_Used;LABEL;Label_Tag;SHEDNAME" #fields to pull
+	#pipesCursor = arcpy.SearchCursor(studypipes, where_clause = where, fields=fs, sort_fields="Capacity D")
+	pipesCursor = arcpy.UpdateCursor(studypipes, where_clause = where, fields=fs, sort_fields="Capacity A")
 	
 	#return first value, being the minimum capacity
 	#capacity = 0.0
 	#id = "null"
 	for pipe in pipesCursor:
+	
+		#grab values
 		capacity 		= pipe.getValue("Capacity")
 		id 				= pipe.getValue("OBJECTID")
 		sticker_link 	= pipe.getValue("STICKERLINK")
@@ -151,10 +167,17 @@ def minimumCapacityStudySewer(studypipes, study_area_id):
 		Shape 			= pipe.getValue("PIPESHAPE")
 		slope			= pipe.getValue("Slope_Used")
 		label			= pipe.getValue("LABEL")
-		continue #move on after first iteration
-	
+		shed			= pipe.getValue("SHEDNAME")
+		
+		#assign tag for labeling purposes
+		pipe.setValue("Label_Tag", "LimitingSewer")
+		pipesCursor.updateRow(pipe)
+		
+		#continue 
+		break #move on after first iteration
+		
 	del pipesCursor
-	return {'capacity':capacity, 'id':id, 'sticker_link':sticker_link, 'intall_year':intall_year, 'D':D, 'H':H, 'W':W, 'Shape':Shape, 'Slope':slope, 'Label':label}
+	return {'capacity':capacity, 'id':id, 'sticker_link':sticker_link, 'intall_year':intall_year, 'D':D, 'H':H, 'W':W, 'Shape':Shape, 'Slope':slope, 'Label':label, 'Shed':shed}
 		
 
 
@@ -200,7 +223,7 @@ def runHydrology(drainage_areas_cursor):
 		#find limiting pipe in study area
 		limitingPipe =minimumCapacityStudySewer(study_pipes, study_area_id)
 		capacity = limitingPipe['capacity']
-		arcpy.AddMessage("\t limted pipe slope = " + str(limitingPipe['Slope']) + ", ID = " + str(id))
+		arcpy.AddMessage("\t limiting pipe slope = " + str(limitingPipe['Slope']) + ", ID = " + str(id))
 		
 		#RUNOFF CALCULATIONS
 		C = drainage_area.getValue("Runoff_Coefficient")
@@ -225,10 +248,11 @@ def runHydrology(drainage_areas_cursor):
 		drainage_area.setValue("Size", limitingPipe['Label']) #show existing size
 		drainage_area.setValue("ReplacementSize", str(replacementD))
 		drainage_area.setValue("MinimumGrade", round(minimumGrade, 4))
+		drainage_area.setValue("StudyShed", limitingPipe['Shed'])
 		drainage_areas_cursor.updateRow(drainage_area)
 		
-
 	del drainage_areas_cursor,
+	
 	
 	
 #iterate through pipes and run calcs
@@ -259,7 +283,7 @@ def runCalcs (study_pipes_cursor):
 		minSlopeAssumed = False
 		
 		#check if slope is Null, try to compute a slope or asssume a minimum value
-		arcpy.AddMessage("checking  pipe "  + str(id) + ", has length = " + str(L))
+		arcpy.AddMessage("checking  pipe "  + str(id))
 		if S_orig is None:
 			if (U_el is not None) and (D_el is not None):
 				S = ( (U_el - D_el) / L ) * 100.0 #percent
