@@ -38,7 +38,7 @@ elif study_area_id is not None and study_area_id != "":
 
 	#grab the project id
 	project_id = study_area_id[:study_area_id.find("_")]
-	arcpy.AddMessage("\t running calcs on Study Area ID = " + str(study_area_id) + "/n/t" + "project_id = " + project_id)
+	arcpy.AddMessage("\t running calcs on Study Area ID = " + str(study_area_id) + ", project_id = " + project_id)
 
 #run calculations on the selected pipe scope
 HHCalculations.runCalcs(study_pipes_cursor)

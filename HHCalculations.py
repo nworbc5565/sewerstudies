@@ -225,7 +225,7 @@ def runHydrology(drainage_areas_cursor):
 		tc = timeOfConcentration(study_pipes, study_area_id)
 
 		#find limiting pipe in study area
-		limitingPipe =minimumCapacityStudySewer(study_pipes, study_area_id)
+		limitingPipe = minimumCapacityStudySewer(study_pipes, study_area_id)
 		capacity = limitingPipe['capacity']
 		arcpy.AddMessage("\t limiting pipe slope = " + str(limitingPipe['Slope']) + ", ID = " + str(id))
 
