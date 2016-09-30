@@ -3,25 +3,35 @@ from arcpy import env
 import random
 import HHCalculations
 import configparser
-
+from utils import random_alphanumeric
+import os
 # =================
 # DATA CONNECTIONS
 # =================
 
 #grab env variables
 config = configparser.ConfigParser()
-config.read('config.ini')
+DOC_ROOT = os.path.dirname(os.path.realpath(__file__))
+config.read(os.path.join(DOC_ROOT, 'config.ini'))
 env.workspace = geodb = config['paths']['geodb']
-study_pipes = geodb + r"\StudiedWasteWaterGravMains"
+study_sewers = geodb + r'\StudiedSewers'#r"\StudiedWasteWaterGravMains"
 study_areas = geodb + r"\Small_Sewer_Drainage_Areas"
 model_sheds = geodb + r"\ModelSheds"
-all_pipes =  r"Waste Water Network\Waste Water Gravity Mains"
+all_pipes =  r'Database Connections\DataConv.sde\DataConv.GISAD.Waste Water Network\DataConv.GISAD.wwGravityMain'
+#r"Waste Water Network\Waste Water Gravity Mains"
 
 
 def unique_values(table, field):
-	#returns list of unique values in a given field, in a table
-	with arcpy.da.SearchCursor(table, [field]) as cursor:
-		return sorted({row[0] for row in cursor})
+	"""
+	returns list of unique values in a given field(s) in a table. if more than
+	one field is passed in, uniqueness is checked considering both fields, where
+	duplicates may exists as long as duplicates do not exist when considering
+	both fields.
+	"""
+	with arcpy.da.SearchCursor(table, field) as cursor:
+		#return sorted({row[0] for row in cursor})
+		#forces a dictionary which allows only one key to exist (unique)
+		return sorted({row for row in cursor})
 
 
 def listHiddenFields(table):
@@ -54,8 +64,10 @@ def matchSchemas(matchToTable, editSchemaTable):
 	#create list of fields to drop from the edit Schema table
 	dropFieldsList = []
 	for fieldname in editFieldsNames:
-		if not fieldname in matchFieldNames and not fieldname in hiddenFieldsNames:
-			print "drop: " + fieldname
+		#compare field names (convert temporarily to upper)
+		if (not fieldname.upper() in [s.upper() for s in matchFieldNames]
+			and not fieldname.upper() in [s.upper() for s in hiddenFieldsNames]):
+			#print "drop: " + fieldname
 			dropFieldsList.append(fieldname)
 
 	#concatentate list and drop the fields
@@ -67,13 +79,13 @@ def matchSchemas(matchToTable, editSchemaTable):
 	addFieldsList = []
 	for fieldname in matchFieldNames:
 		#create list of field names to be added
-		if not fieldname in editFieldsNames:
+		if not fieldname.upper() in [s.upper() for s in editFieldsNames]:
 			addFieldsList.append(fieldname)
 			print "add: " + fieldname
 
 	for field in arcpy.ListFields(matchToTable):
 		#print (field.name + " " + field.type.upper())
-		if field.name in addFieldsList:
+		if field.name.upper() in [s.upper() for s in addFieldsList]:
 			print ("adding " + field.name + " " + field.type.upper())
 			arcpy.AddField_management(in_table = editSchemaTable, field_name = field.name, field_type = field.type.upper(), field_length = field.length)
 
@@ -82,16 +94,16 @@ def matchSchemas(matchToTable, editSchemaTable):
 def makeTempDAandJoinPipes(project_id):
 	#unique list of StudyArea_IDs found in studied sewers
 	#tuple, and replace used to reformat the python list to an SQL friendly string
-	uniqs = str(tuple(unique_values(study_pipes, "StudyArea_ID"))).replace("u", "")
+	uniqs = str(tuple(unique_values(study_sewers, "StudyArea_ID"))).replace("u", "")
 
 	#create random names for temporary DA and sewer layers
-	DAs_temp = "DA_" + ''.join(random.choice('0123456789ABCDEF') for i in range(6))
+	DAtmp = "DA_" + ''.join(random.choice('0123456789ABCDEF') for i in range(6))
 	sewers = "sewers_" + ''.join(random.choice('0123456789ABCDEF') for i in range(6))
 
-	#create temporary DA layer comprised only of DAs that do not have a Study Area ID found in the study_pipes layer (prevents duplicates)
+	#create temporary DA layer comprised only of DAs that do not have a Study Area ID found in the study_sewers layer (prevents duplicates)
 	where = "Project_ID = " + project_id + " AND StudyArea_ID NOT IN " + uniqs
-	arcpy.MakeFeatureLayer_management(study_areas, DAs_temp, where_clause = where)
-	arcpy.SpatialJoin_analysis(all_pipes, join_features = DAs_temp, out_feature_class = sewers, join_operation = "JOIN_ONE_TO_ONE", join_type = "KEEP_COMMON", match_option = "WITHIN_A_DISTANCE", search_radius = "5 Feet")
+	arcpy.MakeFeatureLayer_management(study_areas, DAtmp, where_clause = where)
+	arcpy.SpatialJoin_analysis(all_pipes, join_features = DAtmp, out_feature_class = sewers, join_operation = "JOIN_ONE_TO_ONE", join_type = "KEEP_COMMON", match_option = "WITHIN_A_DISTANCE", search_radius = "5 Feet")
 
 def removeRowsWithAttribute(table, field, value):
 
@@ -143,50 +155,121 @@ def trace_upstream(startid, table=r"Small_Sewer_Drainage_Areas",
 
 	return upstream_ids
 
-def associatePipes(project_id):
+def associate_study_sewers(project_id):
 
-	#copy and associate pipes to the study sewer layer
+	"""
+	given a project ID, create a copy of sewers from the WasterWaterGravMains
+	layer into the StudySewers layer based on a spatial join of drainage areas
+	within the current project.
 
-	#unique list of StudyArea_IDs found in studied sewers
+	Process/Logic:
+		1. 	spatially join WasterWaterGravMains to the subset of drainage areas
+			filtered by project_id.
+		2. 	if spatially joined sewers do not already exist in the StudySewers,
+			copy them into the StudySewers layer.
+		3. 	tabulate all sewers spatially joined within this project_id in the
+			StudySewersRoles table, keeping track of their facilityid and their
+			current StudyArea_ID. (one to many relationship). Prevent duplicates
+			in the StudySewersRoles table by comparing FacililityID and Role: no
+			entry should share a facilityid and role (though duplicates of
+			facilityid are expected)
+	"""
+
+	#unique list of FACILITYID's found in studied sewers (this is redundant)
 	#tuple, and replace used to reformat the python list to an SQL friendly string
-	uniqs = str(tuple(unique_values(study_pipes, "StudyArea_ID"))).replace("u", "")
+	uniqs = str(tuple(unique_values(study_sewers, ["FACILITYID"]))).replace("u", "")
 
 	#create random names for temporary DA and sewer layers
-	DAs_temp 		= "DA_" + ''.join(random.choice('0123456789ABCDEF') for i in range(6))
-	sewers 			= "sewers_" + ''.join(random.choice('0123456789ABCDEF') for i in range(6))
-	sewers2	= "sewersShedJoin_" + ''.join(random.choice('0123456789ABCDEF') for i in range(6))
+	DAtmp = "DA_" + random_alphanumeric(n=6)
+	sewers = "sewers_" + random_alphanumeric(n=6)
+	sewers2	= "sewersShedJoin_" + random_alphanumeric(n=6)
 
-	#create temporary DA layer comprised only of DAs that do not have a Study Area ID found in the study_pipes layer (prevents duplicates)
-	where = "Project_ID = " + project_id + " AND StudyArea_ID NOT IN " + uniqs
-	arcpy.MakeFeatureLayer_management(study_areas, DAs_temp, where_clause = where)
+	#create temporary layer of drainage areas sharing the input project_id
+	where = "Project_ID = " + project_id
+	arcpy.MakeFeatureLayer_management(study_areas, DAtmp, where_clause = where)
 
-	#spatially join the waste water network to the temp Drainage Areas (only areas with Study Area ID not in the StudyPipes)
-	arcpy.SpatialJoin_analysis(all_pipes, join_features = DAs_temp, out_feature_class = sewers, join_operation = "JOIN_ONE_TO_ONE", join_type = "KEEP_COMMON", match_option = "WITHIN_A_DISTANCE", search_radius = "5 Feet")
+	#spatially join the waste water network to the temp Drainage Areas
+	arcpy.SpatialJoin_analysis(
+		all_pipes,
+		join_features = DAtmp,
+		out_feature_class = sewers,
+		join_type = "KEEP_COMMON",
+		)
 
 	#remove SLANTS and anything else unnecessary
 	removeRowsWithAttribute(sewers, "PIPE_TYPE", "'SLANT'")
 
-	#spatially join the new study sewers to the model shed (grab the outfall data)
-	arcpy.SpatialJoin_analysis(sewers, join_features = model_sheds, out_feature_class = sewers2, join_operation = "JOIN_ONE_TO_ONE", join_type = "KEEP_COMMON", match_option="INTERSECT", search_radius = "")
+	#spatially join the new study sewers to the model shed
 	arcpy.AddMessage("\t Joining Model Sheds")
+	arcpy.SpatialJoin_analysis(
+		sewers,
+		join_features = model_sheds,
+		out_feature_class = sewers2,
+		join_type = "KEEP_COMMON"
+		)
 
-	#MAKE SCHEMA MATCH BETWEEN THE TEMP SEWERS LAYER AND THE TARGET STUDY SEWERS LAYER
-	arcpy.AddMessage("\t matching schema")
-	matchSchemas(study_pipes, sewers2)
+	#determine which of the temp sewers should be copied into the studysewers
+	#& StudySewersRoles tables. Don't copy sewers with duplicate facilityid & StudyArea_ID
+	roles = os.path.join(geodb, 'StudySewerRoles')
+
+	unique_sewers = unique_values(study_sewers, ['FacilityID'])
+	unique_roles = unique_values(roles, ['FacilityID', 'StudyAreaID'])
+	print 'unique_roles = {}'.format(unique_roles)
+	#print 'unique_sewers = {}'.format(unique_sewers)
+
+	sewers_cursor = arcpy.da.SearchCursor(sewers2, ['FacilityID', 'StudyArea_ID']) #FIX THIS underscore convention
+	roles_cursor = arcpy.da.InsertCursor(roles, ['FacilityID', 'StudyAreaID'])
+	print 'populating roles'
+	defultrole = 'SSTC'
+	for row in sewers_cursor:
+
+		if row not in unique_roles:
+			#add this data to the unique roles table
+			print row
+			roles_cursor.insertRow(row)
+
+		if row[0] in unique_sewers:
+			#if the curren row is found within the list of uniq FacilityID/StudyID
+			#combos, then this row is not unique and should not be appended to the
+			#study_sewers. However, it should be
+			sewers_cursor.deleteRow()
+			pass
+
+	del roles_cursor
+	del sewers_cursor
+	#append data to StudySewersRoles table
 
 	#run calculations on the temporary pipe scope, apply default flags this time
-	temp_pipes_cursor = arcpy.UpdateCursor(sewers2)
-	HHCalculations.applyDefaultFlags(temp_pipes_cursor)
+	temp_pipes_update_cursor = arcpy.UpdateCursor(sewers2)
+	for row in temp_pipes_update_cursor:
+		#REMOVE SEWERS WHOSE FACILITY ID ALREADY EXISTS IN THE STUDY SEWERS LAYER
+		#NOTE FINISH THIS!
+
+	#print 'apply flags'
+	#HHCalculations.applyDefaultFlags(temp_pipes_cursor)
+
+	#MAKE SCHEMA MATCH BETWEEN THE TEMP SEWERS LAYER AND THE TARGET STUDY SEWERS LAYER
+	print 'matching schema'
+	arcpy.AddMessage("\t matching schema")
+	matchSchemas(study_sewers, sewers2)
 
 	#append the sewers copied from the waste water mains layer to the studied sewers layer
 	arcpy.AddMessage("\t appending sewers to Studied Pipes layer")
-	arcpy.Append_management(inputs = sewers2, target = study_pipes, schema_type = "NO_TEST", field_mapping = "#", subtype = "#")
+	arcpy.Append_management(
+		inputs = sewers2,
+		target = study_sewers,
+		schema_type = "NO_TEST",
+		field_mapping = "#",
+		subtype = "#"
+		)
 
 	#memory clean up
 	arcpy.Delete_management(sewers)
 	arcpy.Delete_management(sewers2)
-	arcpy.Delete_management(DAs_temp)
+	arcpy.Delete_management(DAtmp)
 	del temp_pipes_cursor
+
+
 
 def DAIndexExists(project_id_or_Cursor):
 

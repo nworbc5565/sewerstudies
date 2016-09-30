@@ -5,6 +5,7 @@ from arcpy import env
 import math
 import HydraulicStudyGeneralTools
 import configparser #NOTE should not need to do this in each module
+import os
 
 # =================
 # DATA CONNECTIONS
@@ -12,7 +13,10 @@ import configparser #NOTE should not need to do this in each module
 
 #grab env variables
 config = configparser.ConfigParser()
-config.read('config.ini')
+DOC_ROOT = os.path.dirname(os.path.realpath(__file__))
+print DOC_ROOT
+config.read(os.path.join(DOC_ROOT, 'config.ini'))
+#config.read('config.ini')
 env.workspace = geodb = config['paths']['geodb']
 study_pipes = geodb + r"\StudiedWasteWaterGravMains"
 study_areas = geodb + r"\Small_Sewer_Drainage_Areas"
