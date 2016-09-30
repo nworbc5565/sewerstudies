@@ -13,7 +13,8 @@ import configparser #NOTE should not need to do this in each module
 #grab env variables
 config = configparser.ConfigParser()
 config.read('config.ini')
-env.workspace = geodb = config['paths']['geodb']
+print config.keys()
+env.workspace = geodb = r'C:\Data\Code\HydraulicStudiesDevEnv\Small_Sewer_Capacity.gdb' #config['paths']['geodb']
 study_pipes = geodb + r"\StudiedWasteWaterGravMains"
 study_areas = geodb + r"\Small_Sewer_Drainage_Areas"
 

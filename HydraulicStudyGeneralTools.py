@@ -11,7 +11,8 @@ import configparser
 #grab env variables
 config = configparser.ConfigParser()
 config.read('config.ini')
-env.workspace = geodb = config['paths']['geodb']
+#env.workspace = geodb = config['paths']['geodb']
+env.workspace = geodb = r'C:\Data\Code\HydraulicStudiesDevEnv\Small_Sewer_Capacity.gdb' #
 study_pipes = geodb + r"\StudiedWasteWaterGravMains"
 study_areas = geodb + r"\Small_Sewer_Drainage_Areas"
 model_sheds = geodb + r"\ModelSheds"
@@ -146,7 +147,7 @@ def trace_upstream(startid, table=r"Small_Sewer_Drainage_Areas",
 def associatePipes(project_id):
 
 	#copy and associate pipes to the study sewer layer
-
+	arcpy.AddMessage("\t Associattttttte dat")
 	#unique list of StudyArea_IDs found in studied sewers
 	#tuple, and replace used to reformat the python list to an SQL friendly string
 	uniqs = str(tuple(unique_values(study_pipes, "StudyArea_ID"))).replace("u", "")
