@@ -3,7 +3,7 @@ from arcpy import env
 import random
 import Working_RC_Calcs
 import HHCalculations
-import configparser
+#import configparser
 import os
 
 # =================
@@ -11,10 +11,10 @@ import os
 # =================
 
 #grab env variables
-config = configparser.ConfigParser()
-DOC_ROOT = os.path.dirname(os.path.realpath(__file__))
-config.read(os.path.join(DOC_ROOT, 'config.ini'))
-env.workspace = geodb = config['paths']['geodb']
+# config = configparser.ConfigParser()
+# DOC_ROOT = os.path.dirname(os.path.realpath(__file__))
+# config.read(os.path.join(DOC_ROOT, 'config.ini'))
+env.workspace = geodb = r'\\PWDHQR\Data\Planning & Research\Linear Asset Management Program\Water Sewer Projects Initiated\03 GIS Data\Hydraulic Studies\Small_Sewer_Capacity.gdb'
 study_pipes = geodb + r"\StudiedWasteWaterGravMains"
 study_areas = geodb + r"\Small_Sewer_Drainage_Areas"
 model_sheds = geodb + r"\ModelSheds"
@@ -168,7 +168,7 @@ def associatePipes(project_id):
 	where = "Project_ID = " + project_id + " AND StudyArea_ID NOT IN " + uniqs
 	arcpy.MakeFeatureLayer_management(study_areas, DAs_temp, where_clause = where)
 
-<<<<<<< HEAD
+
 	#spatially join the waste water network to the temp Drainage Areas (only
 	#areas with Study Area ID not in the StudyPipes)
 	arcpy.SpatialJoin_analysis(all_pipes, join_features = DAs_temp,
@@ -177,10 +177,7 @@ def associatePipes(project_id):
 							join_type = "KEEP_COMMON",
 							match_option = "WITHIN_A_DISTANCE")
 							#search_radius = "5 Feet")
-=======
-	#spatially join the waste water network to the temp Drainage Areas (only areas with Study Area ID not in the StudyPipes)
-	arcpy.SpatialJoin_analysis(all_pipes, join_features = DAs_temp, out_feature_class = sewers, join_operation = "JOIN_ONE_TO_ONE", join_type = "KEEP_COMMON", match_option = "WITHIN_A_DISTANCE", search_radius = "5 Feet")
->>>>>>> 6add2ea471a98c8e2e1bd04073a008125f5dbd03
+
 
 	#remove SLANTS and anything else unnecessary
 	removeRowsWithAttribute(sewers, "PIPE_TYPE", "'SLANT'")

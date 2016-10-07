@@ -5,7 +5,7 @@ from arcpy import env
 import math
 import Working_RC_Calcs
 import HydraulicStudyGeneralTools
-import configparser #NOTE should not need to do this in each module
+#import configparser #NOTE should not need to do this in each module
 import os
 
 
@@ -14,10 +14,10 @@ import os
 # =================
 
 #grab env variables
-config = configparser.ConfigParser()
-DOC_ROOT = os.path.dirname(os.path.realpath(__file__))
-config.read(os.path.join(DOC_ROOT, 'config.ini'))
-env.workspace = geodb = config['paths']['geodb']
+# config = configparser.ConfigParser()
+# DOC_ROOT = os.path.dirname(os.path.realpath(__file__))
+# config.read(os.path.join(DOC_ROOT, 'config.ini'))
+env.workspace = geodb = r'\\PWDHQR\Data\Planning & Research\Linear Asset Management Program\Water Sewer Projects Initiated\03 GIS Data\Hydraulic Studies\Small_Sewer_Capacity.gdb'
 study_pipes = geodb + r"\StudiedWasteWaterGravMains"
 study_areas = geodb + r"\Small_Sewer_Drainage_Areas"
 
@@ -224,11 +224,8 @@ def runHydrology(drainage_areas_cursor):
 
 		#work with each study area and determine the pipe calcs based on study area id
 		study_area_id = drainage_area.getValue("StudyArea_ID")
-<<<<<<< HEAD
 		project_id = drainage_area.getValue("Project_ID")
-=======
 
->>>>>>> 6add2ea471a98c8e2e1bd04073a008125f5dbd03
 		#CALCULATIONS ON TC PATH PIPES
 		tc = timeOfConcentration(study_pipes, study_area_id)
 
