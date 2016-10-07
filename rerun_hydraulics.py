@@ -2,6 +2,7 @@
 
 import HHCalculations
 import HydraulicStudyGeneralTools
+import Working_RC_Calcs
 import arcpy
 from arcpy import env
 
