@@ -4,12 +4,20 @@ import arcpy
 from arcpy import env
 import math
 import Working_RC_Calcs
+import HydraulicStudyGeneralTools
+import configparser #NOTE should not need to do this in each module
+import os
+
 
 # =================
 # DATA CONNECTIONS
 # =================
 
-geodb = r"\\PWDHQR\Data\Planning & Research\Linear Asset Management Program\Water Sewer Projects Initiated\03 GIS Data\Hydraulic Studies\Small_Sewer_Capacity.gdb"
+#grab env variables
+config = configparser.ConfigParser()
+DOC_ROOT = os.path.dirname(os.path.realpath(__file__))
+config.read(os.path.join(DOC_ROOT, 'config.ini'))
+env.workspace = geodb = config['paths']['geodb']
 study_pipes = geodb + r"\StudiedWasteWaterGravMains"
 study_areas = geodb + r"\Small_Sewer_Drainage_Areas"
 
@@ -216,17 +224,21 @@ def runHydrology(drainage_areas_cursor):
 
 		#work with each study area and determine the pipe calcs based on study area id
 		study_area_id = drainage_area.getValue("StudyArea_ID")
+<<<<<<< HEAD
 		project_id = drainage_area.getValue("Project_ID")
+=======
+
+>>>>>>> 6add2ea471a98c8e2e1bd04073a008125f5dbd03
 		#CALCULATIONS ON TC PATH PIPES
 		tc = timeOfConcentration(study_pipes, study_area_id)
 
 		#find limiting pipe in study area
-		limitingPipe =minimumCapacityStudySewer(study_pipes, study_area_id)
+		limitingPipe = minimumCapacityStudySewer(study_pipes, study_area_id)
 		capacity = limitingPipe['capacity']
 		arcpy.AddMessage("\t limiting pipe slope = " + str(limitingPipe['Slope']) + ", ID = " + str(id))
 
 		#RUNOFF CALCULATIONS
-		C = drainage_area.getValue("Runoff_Coefficient") #C = Working_RC_Calcs.getC(study_area_id, project_id) 
+		C = drainage_area.getValue("Runoff_Coefficient") #C = Working_RC_Calcs.getC(study_area_id, project_id)
 		print C
 		A = drainage_area.getValue("SHAPE_Area") / 43560
 		I = 116 / ( tc + 17)

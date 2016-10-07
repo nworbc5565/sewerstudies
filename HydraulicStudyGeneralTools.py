@@ -3,12 +3,18 @@ from arcpy import env
 import random
 import Working_RC_Calcs
 import HHCalculations
+import configparser
+import os
 
 # =================
 # DATA CONNECTIONS
 # =================
 
-geodb = r"\\PWDHQR\Data\Planning & Research\Linear Asset Management Program\Water Sewer Projects Initiated\03 GIS Data\Hydraulic Studies\Small_Sewer_Capacity.gdb"
+#grab env variables
+config = configparser.ConfigParser()
+DOC_ROOT = os.path.dirname(os.path.realpath(__file__))
+config.read(os.path.join(DOC_ROOT, 'config.ini'))
+env.workspace = geodb = config['paths']['geodb']
 study_pipes = geodb + r"\StudiedWasteWaterGravMains"
 study_areas = geodb + r"\Small_Sewer_Drainage_Areas"
 model_sheds = geodb + r"\ModelSheds"
@@ -104,6 +110,46 @@ def removeRowsWithAttribute(table, field, value):
 		cursor.deleteRow (row)
 
 
+def trace_upstream(startid, table=r"Small_Sewer_Drainage_Areas",
+					return_field = 'StudyArea_ID',
+					downstream_field='DownStreamStudyAreaID',
+					search_field = 'StudyArea_ID'):
+	"""
+	return a list of study areas ids that cumulatively drain into the
+	given study area. This functions requires that study areas have a downstream
+	study area assigned where appropriate.
+
+	if the upstream lookup field is different than the return field, set this in
+	upstream_field. Otherwise this should be None
+
+	not currently working except for default case
+
+	#RECURSIVE_FUNCTION
+	"""
+
+	upstream_ids = []
+	def find_upstream_elements(current_id):
+		#search for elements having the current element's ID as their
+		#downstream ID. E.g. DownStreamStudyAreaID = '90001_08'
+		where = "{} = '{}'".format(downstream_field, current_id)
+		print where
+		upstream_cursor = arcpy.SearchCursor(table, where_clause=where)
+
+		for row in upstream_cursor:
+
+			#upstream_id = row.getValue(return_field)
+			print row.getValue(return_field)
+			upstream_ids.append(row.getValue(return_field))
+
+			#find_upstream_elements(upstream_id)
+			find_upstream_elements(row.getValue(search_field))
+
+
+	#kick it off
+	find_upstream_elements(startid)
+
+	return upstream_ids
+
 def associatePipes(project_id):
 
 	#copy and associate pipes to the study sewer layer
@@ -122,6 +168,7 @@ def associatePipes(project_id):
 	where = "Project_ID = " + project_id + " AND StudyArea_ID NOT IN " + uniqs
 	arcpy.MakeFeatureLayer_management(study_areas, DAs_temp, where_clause = where)
 
+<<<<<<< HEAD
 	#spatially join the waste water network to the temp Drainage Areas (only
 	#areas with Study Area ID not in the StudyPipes)
 	arcpy.SpatialJoin_analysis(all_pipes, join_features = DAs_temp,
@@ -130,6 +177,10 @@ def associatePipes(project_id):
 							join_type = "KEEP_COMMON",
 							match_option = "WITHIN_A_DISTANCE")
 							#search_radius = "5 Feet")
+=======
+	#spatially join the waste water network to the temp Drainage Areas (only areas with Study Area ID not in the StudyPipes)
+	arcpy.SpatialJoin_analysis(all_pipes, join_features = DAs_temp, out_feature_class = sewers, join_operation = "JOIN_ONE_TO_ONE", join_type = "KEEP_COMMON", match_option = "WITHIN_A_DISTANCE", search_radius = "5 Feet")
+>>>>>>> 6add2ea471a98c8e2e1bd04073a008125f5dbd03
 
 	#remove SLANTS and anything else unnecessary
 	removeRowsWithAttribute(sewers, "PIPE_TYPE", "'SLANT'")
