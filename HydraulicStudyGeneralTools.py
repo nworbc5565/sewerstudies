@@ -18,7 +18,7 @@ env.workspace = geodb = r'\\PWDHQR\Data\Planning & Research\Linear Asset Managem
 study_pipes = geodb + r"\StudiedWasteWaterGravMains"
 study_areas = geodb + r"\Small_Sewer_Drainage_Areas"
 model_sheds = geodb + r"\ModelSheds"
-all_pipes =  r"Waste Water Network\Waste Water Gravity Mains"
+all_pipes = r"Storm Water Gravity Mains" #r"Waste Water Network\Waste Water Gravity Mains"
 
 
 #sys.path.append(r"\\PWDHQR\Data\Planning & Research\Linear Asset Management Program\Water Sewer Projects Initiated\03 GIS Data\Hydraulic Studies\Scripts")
@@ -175,12 +175,12 @@ def associatePipes(project_id):
 							out_feature_class = sewers,
 							join_operation = "JOIN_ONE_TO_MANY", #"JOIN_ONE_TO_ONE",
 							join_type = "KEEP_COMMON",
-							match_option = "WITHIN_A_DISTANCE")
-							#search_radius = "5 Feet")
+							match_option = "WITHIN_A_DISTANCE") #,search_radius = "50 Feet"
 
 
 	#remove SLANTS and anything else unnecessary
 	removeRowsWithAttribute(sewers, "PIPE_TYPE", "'SLANT'")
+	removeRowsWithAttribute(sewers, "LifecycleStatus", "'REM'")
 
 	#spatially join the new study sewers to the model shed (grab the outfall data)
 	arcpy.SpatialJoin_analysis(sewers, join_features = model_sheds,
