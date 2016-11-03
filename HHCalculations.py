@@ -235,8 +235,8 @@ def runHydrology(drainage_areas_cursor):
 		arcpy.AddMessage("\t limiting pipe slope = " + str(limitingPipe['Slope']) + ", ID = " + str(id))
 
 		#RUNOFF CALCULATIONS
-		C = drainage_area.getValue("Runoff_Coefficient")
-		#C = Working_RC_Calcs.getC(study_area_id, project_id)
+		#C = drainage_area.getValue("Runoff_Coefficient")
+		C = Working_RC_Calcs.getC(study_area_id, project_id)
 		print C
 		A = drainage_area.getValue("SHAPE_Area") / 43560
 		I = 116 / ( tc + 17)
@@ -301,7 +301,12 @@ def runCalcs (study_pipes_cursor):
 				S = ( (U_el - D_el) / L ) * 100.0 #percent
 				pipe.setValue("Hyd_Study_Notes", "Autocalculated Slope")
 				calculatedSlope = True
-				arcpy.AddMessage("\t calculated slope = " + str(S) + ", ID = " + str(id))
+				arcpy.AddMessage("calculated slope = " + str(S) + ", ID = " + str(id))
+			elif S is not None and S != default_min_slope:
+			 	arcpy.AddMessage("Manual slope input on {}".format(id))
+			 	pipe.setValue("Hyd_Study_Notes", 'Manual slope input')
+				print 'type of thing {}'.format(type(S))
+			 	S = float(S)
 			else:
 				S = default_min_slope
 				pipe.setValue("Hyd_Study_Notes", "Minimum " + str(S) +  " slope assumed")

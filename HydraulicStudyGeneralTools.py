@@ -173,9 +173,10 @@ def associatePipes(project_id):
 	#areas with Study Area ID not in the StudyPipes)
 	arcpy.SpatialJoin_analysis(all_pipes, join_features = DAs_temp,
 							out_feature_class = sewers,
-							join_operation = "JOIN_ONE_TO_MANY", #"JOIN_ONE_TO_ONE",
+							join_operation = "JOIN_ONE_TO_MANY",
+							#join_operation = "JOIN_ONE_TO_ONE",
 							join_type = "KEEP_COMMON",
-							match_option = "WITHIN_A_DISTANCE") #,search_radius = "50 Feet"
+							match_option = "WITHIN_A_DISTANCE", search_radius = "")
 
 
 	#remove SLANTS and anything else unnecessary
@@ -185,7 +186,8 @@ def associatePipes(project_id):
 	#spatially join the new study sewers to the model shed (grab the outfall data)
 	arcpy.SpatialJoin_analysis(sewers, join_features = model_sheds,
 							out_feature_class = sewers2,
-							join_operation = "JOIN_ONE_TO_ONE",
+							#join_operation = "JOIN_ONE_TO_ONE",
+							join_operation = "JOIN_ONE_TO_MANY",
 							join_type = "KEEP_COMMON",
 							match_option="INTERSECT", search_radius = "")
 
