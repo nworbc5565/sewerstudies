@@ -3,18 +3,21 @@
 import arcpy
 from arcpy import env
 import math
+import Working_RC_Calcs
 import HydraulicStudyGeneralTools
-import configparser #NOTE should not need to do this in each module
+#import configparser #NOTE should not need to do this in each module
+import os
+
 
 # =================
 # DATA CONNECTIONS
 # =================
 
 #grab env variables
-config = configparser.ConfigParser()
-config.read('config.ini')
-print config.keys()
-env.workspace = geodb = r'C:\Data\Code\HydraulicStudiesDevEnv\Small_Sewer_Capacity.gdb' #config['paths']['geodb']
+# config = configparser.ConfigParser()
+# DOC_ROOT = os.path.dirname(os.path.realpath(__file__))
+# config.read(os.path.join(DOC_ROOT, 'config.ini'))
+env.workspace = geodb = r'\\PWDHQR\Data\Planning & Research\Linear Asset Management Program\Water Sewer Projects Initiated\03 GIS Data\Hydraulic Studies\Small_Sewer_Capacity.gdb'
 study_pipes = geodb + r"\StudiedWasteWaterGravMains"
 study_areas = geodb + r"\Small_Sewer_Drainage_Areas"
 
@@ -221,6 +224,7 @@ def runHydrology(drainage_areas_cursor):
 
 		#work with each study area and determine the pipe calcs based on study area id
 		study_area_id = drainage_area.getValue("StudyArea_ID")
+		project_id = drainage_area.getValue("Project_ID")
 
 		#CALCULATIONS ON TC PATH PIPES
 		tc = timeOfConcentration(study_pipes, study_area_id)
@@ -231,7 +235,9 @@ def runHydrology(drainage_areas_cursor):
 		arcpy.AddMessage("\t limiting pipe slope = " + str(limitingPipe['Slope']) + ", ID = " + str(id))
 
 		#RUNOFF CALCULATIONS
-		C = drainage_area.getValue("Runoff_Coefficient")
+		#C = drainage_area.getValue("Runoff_Coefficient")
+		C = Working_RC_Calcs.getC(study_area_id, project_id)
+		print C
 		A = drainage_area.getValue("SHAPE_Area") / 43560
 		I = 116 / ( tc + 17)
 		peak_runoff =  C * I * A
@@ -244,6 +250,7 @@ def runHydrology(drainage_areas_cursor):
 		#minimumGrade = minSlopeRequired(limitingPipe['Shape'], limitingPipe['D'], limitingPipe['H'], limitingPipe['W'], replacementCapacity)
 
 		#set row values and update row
+		drainage_area.setValue("Runoff_Coefficient", C)
 		drainage_area.setValue("Capacity", limitingPipe['capacity'])
 		drainage_area.setValue("TimeOfConcentration", tc)
 		drainage_area.setValue("StickerLink", limitingPipe['sticker_link'])
@@ -294,7 +301,12 @@ def runCalcs (study_pipes_cursor):
 				S = ( (U_el - D_el) / L ) * 100.0 #percent
 				pipe.setValue("Hyd_Study_Notes", "Autocalculated Slope")
 				calculatedSlope = True
-				arcpy.AddMessage("\t calculated slope = " + str(S) + ", ID = " + str(id))
+				arcpy.AddMessage("calculated slope = " + str(S) + ", ID = " + str(id))
+			elif S is not None and S != default_min_slope:
+			 	arcpy.AddMessage("Manual slope input on {}".format(id))
+			 	pipe.setValue("Hyd_Study_Notes", 'Manual slope input')
+				print 'type of thing {}'.format(type(S))
+			 	S = float(S)
 			else:
 				S = default_min_slope
 				pipe.setValue("Hyd_Study_Notes", "Minimum " + str(S) +  " slope assumed")

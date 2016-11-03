@@ -1,19 +1,20 @@
 #Calculated or recalculate hydraulic calcs for a given Project ID
 import HHCalculations
 import HydraulicStudyGeneralTools
+import Working_RC_Calcs
 import arcpy
 from arcpy import env
-import configparser
+#import configparser
 
 #grab env variables
-config = configparser.ConfigParser()
-config.read('config.ini')
+#config = configparser.ConfigParser()
+#config.read('config.ini')
 
 
 # study_pipes = arcpy.GetParameterAsText(0)
 # study_area_id = arcpy.GetParameterAsText(1)
 # project_id = arcpy.GetParameterAsText(2) #optional
-geodb = config['paths']['geodb']#r"\\PWDHQR\Data\Planning & Research\Linear Asset Management Program\Water Sewer Projects Initiated\03 GIS Data\Hydraulic Studies\Small_Sewer_Capacity.gdb"
+geodb = r"\\PWDHQR\Data\Planning & Research\Linear Asset Management Program\Water Sewer Projects Initiated\03 GIS Data\Hydraulic Studies\Small_Sewer_Capacity.gdb"
 study_pipes = geodb + r"\StudiedWasteWaterGravMains"
 study_areas = geodb + r"\Small_Sewer_Drainage_Areas"
 

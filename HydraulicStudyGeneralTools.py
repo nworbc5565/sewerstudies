@@ -1,23 +1,29 @@
 import arcpy
 from arcpy import env
 import random
+import Working_RC_Calcs
 import HHCalculations
-import configparser
+#import configparser
+import os
 
 # =================
 # DATA CONNECTIONS
 # =================
 
 #grab env variables
-config = configparser.ConfigParser()
-config.read('config.ini')
-#env.workspace = geodb = config['paths']['geodb']
-env.workspace = geodb = r'C:\Data\Code\HydraulicStudiesDevEnv\Small_Sewer_Capacity.gdb' #
+# config = configparser.ConfigParser()
+# DOC_ROOT = os.path.dirname(os.path.realpath(__file__))
+# config.read(os.path.join(DOC_ROOT, 'config.ini'))
+env.workspace = geodb = r'\\PWDHQR\Data\Planning & Research\Linear Asset Management Program\Water Sewer Projects Initiated\03 GIS Data\Hydraulic Studies\Small_Sewer_Capacity.gdb'
 study_pipes = geodb + r"\StudiedWasteWaterGravMains"
 study_areas = geodb + r"\Small_Sewer_Drainage_Areas"
 model_sheds = geodb + r"\ModelSheds"
-all_pipes =  r"Waste Water Network\Waste Water Gravity Mains"
+all_pipes = r"Storm Water Gravity Mains" #r"Waste Water Network\Waste Water Gravity Mains"
 
+
+#sys.path.append(r"\\PWDHQR\Data\Planning & Research\Linear Asset Management Program\Water Sewer Projects Initiated\03 GIS Data\Hydraulic Studies\Scripts")
+#import HydraulicStudyGeneralTools
+#reload(HydraulicStudyGeneralTools)
 
 def unique_values(table, field):
 	#returns list of unique values in a given field, in a table
@@ -157,18 +163,34 @@ def associatePipes(project_id):
 	sewers 			= "sewers_" + ''.join(random.choice('0123456789ABCDEF') for i in range(6))
 	sewers2	= "sewersShedJoin_" + ''.join(random.choice('0123456789ABCDEF') for i in range(6))
 
-	#create temporary DA layer comprised only of DAs that do not have a Study Area ID found in the study_pipes layer (prevents duplicates)
+	#create temporary DA layer comprised only of DAs that do not have a
+	#Study Area ID found in the study_pipes layer (prevents duplicates)
 	where = "Project_ID = " + project_id + " AND StudyArea_ID NOT IN " + uniqs
 	arcpy.MakeFeatureLayer_management(study_areas, DAs_temp, where_clause = where)
 
-	#spatially join the waste water network to the temp Drainage Areas (only areas with Study Area ID not in the StudyPipes)
-	arcpy.SpatialJoin_analysis(all_pipes, join_features = DAs_temp, out_feature_class = sewers, join_operation = "JOIN_ONE_TO_ONE", join_type = "KEEP_COMMON", match_option = "WITHIN_A_DISTANCE", search_radius = "5 Feet")
+
+	#spatially join the waste water network to the temp Drainage Areas (only
+	#areas with Study Area ID not in the StudyPipes)
+	arcpy.SpatialJoin_analysis(all_pipes, join_features = DAs_temp,
+							out_feature_class = sewers,
+							join_operation = "JOIN_ONE_TO_MANY",
+							#join_operation = "JOIN_ONE_TO_ONE",
+							join_type = "KEEP_COMMON",
+							match_option = "WITHIN_A_DISTANCE", search_radius = "")
+
 
 	#remove SLANTS and anything else unnecessary
 	removeRowsWithAttribute(sewers, "PIPE_TYPE", "'SLANT'")
+	removeRowsWithAttribute(sewers, "LifecycleStatus", "'REM'")
 
 	#spatially join the new study sewers to the model shed (grab the outfall data)
-	arcpy.SpatialJoin_analysis(sewers, join_features = model_sheds, out_feature_class = sewers2, join_operation = "JOIN_ONE_TO_ONE", join_type = "KEEP_COMMON", match_option="INTERSECT", search_radius = "")
+	arcpy.SpatialJoin_analysis(sewers, join_features = model_sheds,
+							out_feature_class = sewers2,
+							#join_operation = "JOIN_ONE_TO_ONE",
+							join_operation = "JOIN_ONE_TO_MANY",
+							join_type = "KEEP_COMMON",
+							match_option="INTERSECT", search_radius = "")
+
 	arcpy.AddMessage("\t Joining Model Sheds")
 
 	#MAKE SCHEMA MATCH BETWEEN THE TEMP SEWERS LAYER AND THE TARGET STUDY SEWERS LAYER
