@@ -3,3 +3,4 @@ hi dude
 hi dudededee
 hi dudededeeref jierj firej 
 hi adam
+hi adam dude \n whaterver
