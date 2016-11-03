@@ -46,10 +46,10 @@ def listHiddenFields(table):
 
 	return list
 
-def matchSchemas(matchToTable, editSchemaTable):
+def matchSchemas(matchToTable, editSchemaTable, delete_fields = True):
 
 	#find fields to remove from editSchemaTable (those in editSchemaTable but not in matchToTable)
-
+	arcpy.AddMessage("matchToTable={}\neditSchemaTable={}".format(matchToTable,editSchemaTable))
 	#get lists of field names
 	hiddenFieldsNames = [] #listHiddenFields(matchToTable) #this was crashing
 	matchFieldNames = [field.name for field in arcpy.ListFields(matchToTable)]
@@ -59,16 +59,17 @@ def matchSchemas(matchToTable, editSchemaTable):
 	#subtypeList = ["1", "2", "3", "4", "5", "6"]# these exist in the Dataconv
 
 	#create list of fields to drop from the edit Schema table
-	dropFieldsList = []
-	for fieldname in editFieldsNames:
-		if not fieldname in matchFieldNames and not fieldname in hiddenFieldsNames:
-			print "drop: " + fieldname
-			dropFieldsList.append(fieldname)
+	if delete_fields:
+		dropFieldsList = []
+		for fieldname in editFieldsNames:
+			if not fieldname in matchFieldNames and not fieldname in hiddenFieldsNames:
+				print "drop: " + fieldname
+				dropFieldsList.append(fieldname)
 
-	#concatentate list and drop the fields
-	dropFields = ";".join(dropFieldsList)
+		#concatentate list and drop the fields
+		dropFields = ";".join(dropFieldsList)
 
-	arcpy.DeleteField_management(in_table=editSchemaTable, drop_field=dropFields)
+		arcpy.DeleteField_management(in_table=editSchemaTable, drop_field=dropFields)
 
 	#add necessary fields
 	addFieldsList = []
@@ -150,17 +151,20 @@ def trace_upstream(startid, table=r"Small_Sewer_Drainage_Areas",
 
 	return upstream_ids
 
-def associatePipes(project_id):
+def associatePipes(project_id, from_sewers, study_sewers, study_areas):
+
+	#set the environment to the study_sewer geodb
+	env.workspace = os.path.dirname(study_sewers)
 
 	#copy and associate pipes to the study sewer layer
-	arcpy.AddMessage("\t Associattttttte dat")
+	arcpy.AddMessage("\t Associattttttte dat boi")
 	#unique list of StudyArea_IDs found in studied sewers
 	#tuple, and replace used to reformat the python list to an SQL friendly string
-	uniqs = str(tuple(unique_values(study_pipes, "StudyArea_ID"))).replace("u", "")
+	uniqs = str(tuple(unique_values(study_sewers, "StudyArea_ID"))).replace("u", "")
 
 	#create random names for temporary DA and sewer layers
-	DAs_temp 		= "DA_" + ''.join(random.choice('0123456789ABCDEF') for i in range(6))
-	sewers 			= "sewers_" + ''.join(random.choice('0123456789ABCDEF') for i in range(6))
+	DAs_temp = "DA_" + ''.join(random.choice('0123456789ABCDEF') for i in range(6))
+	sewers = "sewers_" + ''.join(random.choice('0123456789ABCDEF') for i in range(6))
 	sewers2	= "sewersShedJoin_" + ''.join(random.choice('0123456789ABCDEF') for i in range(6))
 
 	#create temporary DA layer comprised only of DAs that do not have a
@@ -171,12 +175,12 @@ def associatePipes(project_id):
 
 	#spatially join the waste water network to the temp Drainage Areas (only
 	#areas with Study Area ID not in the StudyPipes)
-	arcpy.SpatialJoin_analysis(all_pipes, join_features = DAs_temp,
+	arcpy.SpatialJoin_analysis(from_sewers, join_features = DAs_temp,
 							out_feature_class = sewers,
 							join_operation = "JOIN_ONE_TO_MANY",
-							#join_operation = "JOIN_ONE_TO_ONE",
 							join_type = "KEEP_COMMON",
-							match_option = "WITHIN_A_DISTANCE", search_radius = "")
+							match_option = "HAVE_THEIR_CENTER_IN",
+							search_radius = "15 Feet",)
 
 
 	#remove SLANTS and anything else unnecessary
@@ -186,30 +190,32 @@ def associatePipes(project_id):
 	#spatially join the new study sewers to the model shed (grab the outfall data)
 	arcpy.SpatialJoin_analysis(sewers, join_features = model_sheds,
 							out_feature_class = sewers2,
-							#join_operation = "JOIN_ONE_TO_ONE",
 							join_operation = "JOIN_ONE_TO_MANY",
 							join_type = "KEEP_COMMON",
-							match_option="INTERSECT", search_radius = "")
+							match_option="HAVE_THEIR_CENTER_IN",
+							search_radius = "",)
 
 	arcpy.AddMessage("\t Joining Model Sheds")
 
 	#MAKE SCHEMA MATCH BETWEEN THE TEMP SEWERS LAYER AND THE TARGET STUDY SEWERS LAYER
 	arcpy.AddMessage("\t matching schema")
-	matchSchemas(study_pipes, sewers2)
+	matchSchemas(study_sewers, sewers2, delete_fields=False)
 
 	#run calculations on the temporary pipe scope, apply default flags this time
-	temp_pipes_cursor = arcpy.UpdateCursor(sewers2)
-	HHCalculations.applyDefaultFlags(temp_pipes_cursor)
+	fields = ['OBJECTID', 'TC_Path', 'StudySewer', 'Tag']
+	with arcpy.da.UpdateCursor(sewers2, fields) as temp_pipes_cursor:
+		HHCalculations.applyDefaultFlags(temp_pipes_cursor)
 
 	#append the sewers copied from the waste water mains layer to the studied sewers layer
-	arcpy.AddMessage("\t appending sewers to Studied Pipes layer")
-	arcpy.Append_management(inputs = sewers2, target = study_pipes, schema_type = "NO_TEST", field_mapping = "#", subtype = "#")
+	arcpy.AddMessage("\t appending sewers to {}".format(study_sewers))
+	arcpy.Append_management(inputs = sewers2,
+							target = study_sewers,
+							schema_type = "NO_TEST",)
 
 	#memory clean up
 	arcpy.Delete_management(sewers)
 	arcpy.Delete_management(sewers2)
 	arcpy.Delete_management(DAs_temp)
-	del temp_pipes_cursor
 
 def DAIndexExists(project_id_or_Cursor):
 

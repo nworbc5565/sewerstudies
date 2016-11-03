@@ -141,11 +141,11 @@ def applyDefaultFlags(study_pipes_cursor):
 
 	for pipe in study_pipes_cursor:
 
-		print(pipe.getValue("OBJECTID"))
+		#print(pipe.getValue("OBJECTID"))
 		#during the first run through, should apply these default flags, and skip all other calcs
-		pipe.setValue("TC_Path", "N")
-		pipe.setValue("StudySewer", "N")
-		pipe.setValue("Tag", "None")
+		pipe[1] = 'N' # pipe.setValue("TC_Path", "N")
+		pipe[2] = 'N' # pipe.setValue("StudySewer", "N")
+		pipe[3] = 'None' # pipe.setValue("Tag", "None")
 		study_pipes_cursor.updateRow(pipe)
 
 	del study_pipes_cursor
