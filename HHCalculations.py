@@ -4,7 +4,7 @@ import arcpy
 from arcpy import env
 import math
 import HydraulicStudyGeneralTools
-import configparser #NOTE should not need to do this in each module
+#import configparser #NOTE should not need to do this in each module
 import os
 
 # =================
@@ -12,12 +12,12 @@ import os
 # =================
 
 #grab env variables
-config = configparser.ConfigParser()
-DOC_ROOT = os.path.dirname(os.path.realpath(__file__))
-print DOC_ROOT
-config.read(os.path.join(DOC_ROOT, 'config.ini'))
+# config = configparser.ConfigParser()
+# DOC_ROOT = os.path.dirname(os.path.realpath(__file__))
+# print DOC_ROOT
+# config.read(os.path.join(DOC_ROOT, 'config.ini'))
 #config.read('config.ini')
-env.workspace = geodb = config['paths']['geodb']
+env.workspace = geodb = env.workspace = geodb = r'\\PWDHQR\Data\Planning & Research\Linear Asset Management Program\Water Sewer Projects Initiated\03 GIS Data\Hydraulic Studies\Small_Sewer_Capacity.gdb'
 study_pipes = geodb + r"\StudiedWasteWaterGravMains"
 study_areas = geodb + r"\Small_Sewer_Drainage_Areas"
 

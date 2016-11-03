@@ -2,7 +2,7 @@ import arcpy
 from arcpy import env
 import random
 import HHCalculations
-import configparser
+#import configparser
 from utils import random_alphanumeric
 import os
 # =================
@@ -10,10 +10,10 @@ import os
 # =================
 
 #grab env variables
-config = configparser.ConfigParser()
-DOC_ROOT = os.path.dirname(os.path.realpath(__file__))
-config.read(os.path.join(DOC_ROOT, 'config.ini'))
-env.workspace = geodb = config['paths']['geodb']
+# config = configparser.ConfigParser()
+# DOC_ROOT = os.path.dirname(os.path.realpath(__file__))
+# config.read(os.path.join(DOC_ROOT, 'config.ini'))
+env.workspace = geodb = r'\\PWDHQR\Data\Planning & Research\Linear Asset Management Program\Water Sewer Projects Initiated\03 GIS Data\Hydraulic Studies\Small_Sewer_Capacity.gdb'
 study_sewers = geodb + r'\StudiedSewers'#r"\StudiedWasteWaterGravMains"
 study_areas = geodb + r"\Small_Sewer_Drainage_Areas"
 model_sheds = geodb + r"\ModelSheds"
@@ -32,6 +32,39 @@ def unique_values(table, field):
 		#return sorted({row[0] for row in cursor})
 		#forces a dictionary which allows only one key to exist (unique)
 		return sorted({row for row in cursor})
+
+def unique_values_new(table, field=None, fields=None, sql_ready=False):
+	"""
+	returns list of unique values in a given field(s) in a table. if more than
+	one field is passed in, uniqueness is checked considering both fields, where
+	duplicates may exists as long as duplicates do not exist when considering
+	both fields.
+	"""
+	#returns list of unique values in a given field, in a table
+	if fields is not None:
+		#check for uniqueness across multple columns, return flattened strings
+		with arcpy.da.SearchCursor(table, fields) as cursor:
+
+			#uniques = sorted({row[0] for row in cursor})
+			uniques = sorted({row for row in cursor})
+
+			if sql_ready:
+				#remove unicode thing and change to tuple
+				return str(tuple(uniques)).replace("u", "")
+			else:
+				return uniques
+
+	else:
+		with arcpy.da.SearchCursor(table, field) as cursor:
+
+			#uniques = sorted({row[0] for row in cursor})
+			uniques = sorted({row[0] for row in cursor})
+
+			if sql_ready:
+				#remove unicode thing and change to tuple
+				return str(tuple(uniques)).replace("u", "")
+			else:
+				return uniques
 
 
 def listHiddenFields(table):
@@ -163,8 +196,12 @@ def associate_study_sewers(project_id):
 	within the current project.
 
 	Process/Logic:
+		0. 	spatially join (intersect) current study area to existing study areas.
+		 	associate those studied sewers (from the intersected existintg study
+			sewers) with the current study area in the roles table.
 		1. 	spatially join WasterWaterGravMains to the subset of drainage areas
-			filtered by project_id.
+			filtered by project_id that do not fall within an existing study area.
+			(Achieved with Erase tool?)
 		2. 	if spatially joined sewers do not already exist in the StudySewers,
 			copy them into the StudySewers layer.
 		3. 	tabulate all sewers spatially joined within this project_id in the
@@ -177,32 +214,47 @@ def associate_study_sewers(project_id):
 
 	#unique list of FACILITYID's found in studied sewers (this is redundant)
 	#tuple, and replace used to reformat the python list to an SQL friendly string
+	roles = os.path.join(geodb, 'StudySewerRoles')
 	uniqs = str(tuple(unique_values(study_sewers, ["FACILITYID"]))).replace("u", "")
+	uniq_areas = unique_values_new(roles, ['StudyAreaID'], sql_ready=True)
 
 	#create random names for temporary DA and sewer layers
 	DAtmp = "DA_" + random_alphanumeric(n=6)
-	sewers = "sewers_" + random_alphanumeric(n=6)
+	studied_DAs = 'studied_DAs_' + random_alphanumeric(n=6)
+	unstudied_DAs = 'unstudiedDAs_'+ random_alphanumeric(n=6)
+	unstudied_sewers = "sewers_" + random_alphanumeric(n=6)
+	studied_sewers = "studiedsewers_" + random_alphanumeric(n=6)
 	sewers2	= "sewersShedJoin_" + random_alphanumeric(n=6)
 
 	#create temporary layer of drainage areas sharing the input project_id
-	where = "Project_ID = " + project_id
+
+	where = "Project_ID = {} AND StudyArea_ID NOT IN {}".format(project_id, uniq_areas)
 	arcpy.MakeFeatureLayer_management(study_areas, DAtmp, where_clause = where)
+
+	#isolate any DAs within current scope that already have been studied
+	arcpy.Intersect_analysis([study_areas, DAtmp], out_feature_class=studied_DAs)
+	ss_ids_inscope = unique_values(studied_DAs, ['StudyArea_ID']) #FACILITYIDs already studied
+	print 'ss_ids_inscope= {}'.format(ss_ids_inscope)
+	return 0
+	#isolate the drainage areas that have not been studied previously. these
+	#will be used to spatially join sewers from ww grav mains
+	arcpy.Erase_analysis(DAtmp, study_areas, out_feature_class=unstudied_DAs)
 
 	#spatially join the waste water network to the temp Drainage Areas
 	arcpy.SpatialJoin_analysis(
 		all_pipes,
-		join_features = DAtmp,
-		out_feature_class = sewers,
+		join_features = unstudied_DAs,
+		out_feature_class = unstudied_sewers,
 		join_type = "KEEP_COMMON",
 		)
 
 	#remove SLANTS and anything else unnecessary
-	removeRowsWithAttribute(sewers, "PIPE_TYPE", "'SLANT'")
+	removeRowsWithAttribute(unstudied_sewers, "PIPE_TYPE", "'SLANT'")
 
-	#spatially join the new study sewers to the model shed
+	#spatially join the new unstudied study sewers to the model shed
 	arcpy.AddMessage("\t Joining Model Sheds")
 	arcpy.SpatialJoin_analysis(
-		sewers,
+		unstudied_sewers,
 		join_features = model_sheds,
 		out_feature_class = sewers2,
 		join_type = "KEEP_COMMON"
@@ -210,16 +262,16 @@ def associate_study_sewers(project_id):
 
 	#determine which of the temp sewers should be copied into the studysewers
 	#& StudySewersRoles tables. Don't copy sewers with duplicate facilityid & StudyArea_ID
-	roles = os.path.join(geodb, 'StudySewerRoles')
 
 	unique_sewers = unique_values(study_sewers, ['FacilityID'])
 	unique_roles = unique_values(roles, ['FacilityID', 'StudyAreaID'])
 	print 'unique_roles = {}'.format(unique_roles)
 	#print 'unique_sewers = {}'.format(unique_sewers)
-
+	return 0
 	sewers_cursor = arcpy.da.SearchCursor(sewers2, ['FacilityID', 'StudyArea_ID']) #FIX THIS underscore convention
 	roles_cursor = arcpy.da.InsertCursor(roles, ['FacilityID', 'StudyAreaID'])
 	print 'populating roles'
+	print
 	defultrole = 'SSTC'
 	for row in sewers_cursor:
 
@@ -233,7 +285,6 @@ def associate_study_sewers(project_id):
 			#combos, then this row is not unique and should not be appended to the
 			#study_sewers. However, it should be
 			sewers_cursor.deleteRow()
-			pass
 
 	del roles_cursor
 	del sewers_cursor
@@ -243,6 +294,7 @@ def associate_study_sewers(project_id):
 	temp_pipes_update_cursor = arcpy.UpdateCursor(sewers2)
 	for row in temp_pipes_update_cursor:
 		#REMOVE SEWERS WHOSE FACILITY ID ALREADY EXISTS IN THE STUDY SEWERS LAYER
+		pass
 		#NOTE FINISH THIS!
 
 	#print 'apply flags'
