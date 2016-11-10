@@ -61,7 +61,7 @@ def RunoffCoefficientCalc (PerviousArea, total_area, study_areas, studyarea_id):
 
 def getC(studyarea_id, project_id):
 	where = "StudyArea_ID = '{}'".format(studyarea_id)
-
+	arcpy.AddMessage('test message for deploy check')
 # =======================
 # TEMPORARY FILE CREATION
 # =======================
