@@ -71,8 +71,8 @@ def getC(studyarea_id, project_id):
 
 	# Makes new layer "out_layer" based on features in the "where_clause". Essentially makes a layer of only the specific Study Area designated in RunHH Tool
 	# The following inputs are layers or table views: "Drainage Areas\DA Indices\DA_90000"
-	in_features="Drainage Areas\DA Indices\DA_%s" %(project_id)
-	arcpy.FeatureClassToFeatureClass_conversion(in_features="Drainage Areas\DA Indices\DA_%s" %(project_id), out_path="//PWDHQR/Data/Planning & Research/Linear Asset Management Program/Water Sewer Projects Initiated/03 GIS Data/Hydraulic Studies/Small_Sewer_Capacity.gdb", out_name="Temp_SmallSewer", where_clause= where, field_mapping="""StudyArea_ID "StudyArea_ID" true true false 20 Text 0 0 ,First,#,in_features,StudyArea_ID,-1,-1;Shape_Area "Shape_Area" false true true 8 Double 0 0 ,First,#,in_features,Shape_Area,-1,-1""", config_keyword="")
+	in_features=r"Drainage Areas\DA Indices\DA_%s" %(project_id)
+	arcpy.FeatureClassToFeatureClass_conversion(in_features=in_features, out_path=r"//PWDHQR/Data/Planning & Research/Linear Asset Management Program/Water Sewer Projects Initiated/03 GIS Data/Hydraulic Studies/Small_Sewer_Capacity.gdb", out_name="Temp_SmallSewer", where_clause= where, field_mapping="""StudyArea_ID "StudyArea_ID" true true false 20 Text 0 0 ,First,#,in_features,StudyArea_ID,-1,-1;Shape_Area "Shape_Area" false true true 8 Double 0 0 ,First,#,in_features,Shape_Area,-1,-1""", config_keyword="")
 
 	#Attempting to Fix Refresh bug
 	arcpy.RefreshCatalog("//PWDHQR/Data/Planning & Research/Linear Asset Management Program/Water Sewer Projects Initiated/03 GIS Data/Hydraulic Studies")
