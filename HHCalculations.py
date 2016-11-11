@@ -138,8 +138,13 @@ def applyDefaultFlags(study_pipes_cursor):
 	del study_pipes_cursor
 
 def minimumCapacityStudySewer(sewers_layer, study_area_id):
-	#Return the minimum study sewer capacity in a given study area
 
+	"""
+	Return the minimum study sewer capacity in a given study area.
+
+	this fails when processing a studyarea_id with none of the sewers tagged
+	with StudySewer = "Y"
+	"""
 	#search cursor on study sewers in ascending order on capacity
 	where = "StudyArea_ID = '{}' AND StudySewer = 'Y'".format(study_area_id)
 	sort = (None, 'ORDER BY Capacity ASC')
@@ -150,8 +155,6 @@ def minimumCapacityStudySewer(sewers_layer, study_area_id):
 
 	#sewers_layer = r'C:\Data\Code\HydraulicStudiesDevEnv\Small_Sewer_Capacity.gdb\StudiedWasteWaterGravMains'
 	arcpy.AddMessage('where = {}'.format(where))
-	arcpy.AddMessage('min cap env = {}'.format(arcpy.env.workspace))
-
 
 	with arcpy.da.UpdateCursor(sewers_layer, fields,
 								where, sql_clause = sort) as sewer_cursor:
@@ -180,13 +183,19 @@ def minimumCapacityStudySewer(sewers_layer, study_area_id):
 
 			break #move on after first iteration
 
-		return {'capacity':capacity,
-				'id':id, 'sticker_link':sticker_link,
-				'intall_year':intall_year,
-				'D':D, 'H':H, 'W':W,
-				'Shape':Shape, 'Slope':slope,
-				'Label':label, 'Shed':shed}
+		try:
+			# if the no StudySewer tags are "Y", the query returns nothing, and
+			# these variables are not assigned
+			return {'capacity':capacity,
+					'id':id, 'sticker_link':sticker_link,
+					'intall_year':intall_year,
+					'D':D, 'H':H, 'W':W,
+					'Shape':Shape, 'Slope':slope,
+					'Label':label, 'Shed':shed}
 
+		except:
+			arcpy.AddWarning("Minimum capacity sewer not found in {}".format(study_area_id))
+			arcpy.AddWarning("Did you tag the StudySewers in that Study Area?")
 
 
 # ====================
@@ -314,7 +323,7 @@ def run_hydraulics(project_id, study_sewers, study_area_id=None):
 		if S_orig is None:
 			if (U_el is not None) and (D_el is not None):
 				S = ( (U_el - D_el) / L ) * 100.0 #percent
-				pipe.setValue("Hyd_Study_Notes", "Autocalculated Slope")
+				sewer.setValue("Hyd_Study_Notes", "Autocalculated Slope")
 				calculatedSlope = True
 				arcpy.AddMessage("calculated slope = " + str(S) + ", ID = " + str(id))
 			elif S is not None and S != default_min_slope:
