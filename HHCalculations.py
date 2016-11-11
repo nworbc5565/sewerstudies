@@ -4,23 +4,10 @@ import arcpy
 from arcpy import env
 import math
 import Working_RC_Calcs
-import HydraulicStudyGeneralTools
-#import configparser #NOTE should not need to do this in each module
+import ssha_tools
+import utils
 import os
-
-
-# =================
-# DATA CONNECTIONS
-# =================
-
-#grab env variables
-# config = configparser.ConfigParser()
-# DOC_ROOT = os.path.dirname(os.path.realpath(__file__))
-# config.read(os.path.join(DOC_ROOT, 'config.ini'))
-env.workspace = geodb = r'\\PWDHQR\Data\Planning & Research\Linear Asset Management Program\Water Sewer Projects Initiated\03 GIS Data\Hydraulic Studies\Small_Sewer_Capacity.gdb'
-study_pipes = geodb + r"\StudiedWasteWaterGravMains"
-study_areas = geodb + r"\Small_Sewer_Drainage_Areas"
-
+import hhcalcs
 
 # ====================
 # HYDRUALIC EQUATIONS
@@ -150,42 +137,55 @@ def applyDefaultFlags(study_pipes_cursor):
 
 	del study_pipes_cursor
 
-def minimumCapacityStudySewer(studypipes, study_area_id):
+def minimumCapacityStudySewer(sewers_layer, study_area_id):
 	#Return the minimum study sewer capacity in a given study area
 
 	#search cursor on study sewers in ascending order on capacity
-	where = "StudyArea_ID = '" + study_area_id + "' AND StudySewer = 'Y'"
-	fs ="Capacity; OBJECTID; STICKERLINK; Year_Installed; PIPESHAPE; Diameter; Height; Width;Slope_Used;LABEL;Label_Tag;SHEDNAME" #fields to pull
-	#pipesCursor = arcpy.SearchCursor(studypipes, where_clause = where, fields=fs, sort_fields="Capacity D")
-	pipesCursor = arcpy.UpdateCursor(studypipes, where_clause = where, fields=fs, sort_fields="Capacity A")
+	where = "StudyArea_ID = '{}' AND StudySewer = 'Y'".format(study_area_id)
+	sort = (None, 'ORDER BY Capacity ASC')
+	# fs ="Capacity; OBJECTID; STICKERLINK; Year_Installed; PIPESHAPE; Diameter; Height; Width;Slope_Used;LABEL;Label_Tag;SHEDNAME"
+	fields = ['Capacity', 'OBJECTID', 'STICKERLINK', 'Year_Installed',
+			'PIPESHAPE', 'Diameter', 'Height', 'Width','Slope_Used',
+			'LABEL','SHEDNAME','Label_Tag']
 
-	#return first value, being the minimum capacity
-	#capacity = 0.0
-	#id = "null"
-	for pipe in pipesCursor:
+	#sewers_layer = r'C:\Data\Code\HydraulicStudiesDevEnv\Small_Sewer_Capacity.gdb\StudiedWasteWaterGravMains'
+	arcpy.AddMessage('where = {}'.format(where))
+	arcpy.AddMessage('min cap env = {}'.format(arcpy.env.workspace))
 
-		#grab values
-		capacity 		= pipe.getValue("Capacity")
-		id 				= pipe.getValue("OBJECTID")
-		sticker_link 	= pipe.getValue("STICKERLINK")
-		intall_year 	= pipe.getValue("Year_Installed")
-		D 				= pipe.getValue("Diameter")
-		H 				= pipe.getValue("Height")
-		W 				= pipe.getValue("Width")
-		Shape 			= pipe.getValue("PIPESHAPE")
-		slope			= pipe.getValue("Slope_Used")
-		label			= pipe.getValue("LABEL")
-		shed			= pipe.getValue("SHEDNAME")
 
-		#assign tag for labeling purposes
-		pipe.setValue("Label_Tag", "LimitingSewer")
-		pipesCursor.updateRow(pipe)
+	with arcpy.da.UpdateCursor(sewers_layer, fields,
+								where, sql_clause = sort) as sewer_cursor:
 
-		#continue
-		break #move on after first iteration
+		#arcpy.AddMessage('sewer_cursor len	: {}'.format( len([row for row in sewer_cursor]) ))
 
-	del pipesCursor
-	return {'capacity':capacity, 'id':id, 'sticker_link':sticker_link, 'intall_year':intall_year, 'D':D, 'H':H, 'W':W, 'Shape':Shape, 'Slope':slope, 'Label':label, 'Shed':shed}
+		#return first value, being the minimum capacity
+		for s in sewer_cursor:
+			arcpy.AddMessage('min pipe searching {}'.format(s[1]))
+			#grab values
+			capacity 		= s[0] #pipe.getValue("Capacity")
+			id 				= s[1] #pipe.getValue("OBJECTID")
+			sticker_link 	= s[2] #pipe.getValue("STICKERLINK")
+			intall_year 	= s[3] #pipe.getValue("Year_Installed")
+			Shape 			= s[4] #pipe.getValue("PIPESHAPE")
+			D 				= s[5] #pipe.getValue("Diameter")
+			H 				= s[6] #pipe.getValue("Height")
+			W 				= s[7] #pipe.getValue("Width")
+			slope			= s[8] #pipe.getValue("Slope_Used")
+			label			= s[9] #pipe.getValue("LABEL")
+			shed			= s[10] #pipe.getValue("SHEDNAME")
+
+			#assign tag for labeling purposes
+			s[11] = 'LimitingSewer' #pipe.setValue("Label_Tag", "LimitingSewer")
+			sewer_cursor.updateRow(s)
+
+			break #move on after first iteration
+
+		return {'capacity':capacity,
+				'id':id, 'sticker_link':sticker_link,
+				'intall_year':intall_year,
+				'D':D, 'H':H, 'W':W,
+				'Shape':Shape, 'Slope':slope,
+				'Label':label, 'Shed':shed}
 
 
 
@@ -218,7 +218,16 @@ def phillyStormPeak (tc, area, C):
 
 #iterate through each DA within a given project and sum the TCs with their DrainageArea_ID
 #drainage_areas_cursor = arcpy.UpdateCursor(DAs, where_clause = "Project_ID = " + project_id)
-def runHydrology(drainage_areas_cursor):
+def run_hydrology(project_id, study_sewers, study_areas, study_area_id=None):
+
+	"""
+	run hydrologic calculations on a set of study areas within a project_id
+	scope (or optionally a single study area scope)
+	"""
+
+	where = utils.where_clause_from_user_input(project_id, study_area_id)
+	arcpy.AddMessage("where hydrol = {}\nenv = {}".format(where, arcpy.env.workspace))
+	drainage_areas_cursor = arcpy.UpdateCursor(study_areas, where_clause = where)
 
 	for drainage_area in drainage_areas_cursor:
 
@@ -227,12 +236,13 @@ def runHydrology(drainage_areas_cursor):
 		project_id = drainage_area.getValue("Project_ID")
 
 		#CALCULATIONS ON TC PATH PIPES
-		tc = timeOfConcentration(study_pipes, study_area_id)
+		tc = timeOfConcentration(study_sewers, study_area_id)
 
 		#find limiting pipe in study area
-		limitingPipe = minimumCapacityStudySewer(study_pipes, study_area_id)
-		capacity = limitingPipe['capacity']
-		arcpy.AddMessage("\t limiting pipe slope = " + str(limitingPipe['Slope']) + ", ID = " + str(id))
+		arcpy.AddMessage("minimumCapacityStudySewer({},{})".format(study_sewers, study_area_id))
+		limitingSewer = minimumCapacityStudySewer(study_sewers, study_area_id)
+		# capacity = limitingSewer['capacity']
+		arcpy.AddMessage("min slope={}, id={}".format(limitingSewer['Slope'], id))
 
 		#RUNOFF CALCULATIONS
 		C = drainage_area.getValue("Runoff_Coefficient")
@@ -245,22 +255,22 @@ def runHydrology(drainage_areas_cursor):
 		#replacement pipe characteristics
 		#replacementCapacity = max(peak_runoff, limitingPipe['capacity']) #capacity provided in new pipe should match existing Q or runoff Q (never decrease capacity)
 		replacementCapacity = peak_runoff #replacement pipe capacity can be decreased from existing
-		replacementD = max( minimumEquivalentCircularPipe(replacementCapacity, limitingPipe['Slope']), 18) #pipe diameter (inches) needed to pass the required Q, with a minimum D if 18 inches
+		replacementD = max( minimumEquivalentCircularPipe(replacementCapacity, limitingSewer['Slope']), 18) #pipe diameter (inches) needed to pass the required Q, with a minimum D if 18 inches
 		minimumGrade = minSlopeRequired (shape="CIR", diameter=replacementD, height=None, width=None, peakQ=replacementCapacity)
 		#minimumGrade = minSlopeRequired(limitingPipe['Shape'], limitingPipe['D'], limitingPipe['H'], limitingPipe['W'], replacementCapacity)
 
 		#set row values and update row
 		drainage_area.setValue("Runoff_Coefficient", C)
-		drainage_area.setValue("Capacity", limitingPipe['capacity'])
+		drainage_area.setValue("Capacity", limitingSewer['capacity'])
 		drainage_area.setValue("TimeOfConcentration", tc)
-		drainage_area.setValue("StickerLink", limitingPipe['sticker_link'])
-		drainage_area.setValue("InstallDate", limitingPipe['intall_year'])
+		drainage_area.setValue("StickerLink", limitingSewer['sticker_link'])
+		drainage_area.setValue("InstallDate", limitingSewer['intall_year'])
 		drainage_area.setValue("Intsensity", round(I, 2)) #NOTE -> spelling error in field name
 		drainage_area.setValue("Peak_Runoff", round(peak_runoff, 2))
-		drainage_area.setValue("Size", limitingPipe['Label']) #show existing size
+		drainage_area.setValue("Size", limitingSewer['Label']) #show existing size
 		drainage_area.setValue("ReplacementSize", str(replacementD))
 		drainage_area.setValue("MinimumGrade", round(minimumGrade, 4))
-		drainage_area.setValue("StudyShed", limitingPipe['Shed'])
+		drainage_area.setValue("StudyShed", limitingSewer['Shed'])
 		drainage_areas_cursor.updateRow(drainage_area)
 
 	del drainage_areas_cursor,
@@ -268,24 +278,29 @@ def runHydrology(drainage_areas_cursor):
 
 
 #iterate through pipes and run calcs
-def runCalcs (study_pipes_cursor):
+#def runCalcs (study_pipes_cursor):
+def run_hydraulics(project_id, study_sewers, study_area_id=None):
 
-	for pipe in study_pipes_cursor:
+	where = utils.where_clause_from_user_input(project_id, study_area_id)
+	arcpy.AddMessage("wherey = {}".format(where))
+	study_sewers_cursor = arcpy.UpdateCursor(study_sewers, where_clause = where)
+
+	for sewer in study_sewers_cursor:
 
 		#Grab pipe parameters
-		S 		= pipe.getValue("Slope_Used") #slope used in calculations
-		S_orig	= pipe.getValue("Slope") #original slope from DataConv data
-		L 		= pipe.shape.length #access geometry directly to avoid bug where DA perimeter is read after join
-		D 		= pipe.getValue("Diameter")
-		H 		= pipe.getValue("Height")
-		W 		= pipe.getValue("Width")
-		Shape 	= pipe.getValue("PIPESHAPE")
-		U_el	= pipe.getValue("UpStreamElevation")
-		D_el	= pipe.getValue("DownStreamElevation")
-		id 		= pipe.getValue("OBJECTID")
-		TC		= pipe.getValue("TC_Path")
-		ss		= pipe.getValue("StudySewer")
-		tag 	= pipe.getValue("Tag")
+		S 		= sewer.getValue("Slope_Used") #slope used in calculations
+		S_orig	= sewer.getValue("Slope") #original slope from DataConv data
+		L 		= sewer.shape.length #access geometry directly to avoid bug where DA perimeter is read after join
+		D 		= sewer.getValue("Diameter")
+		H 		= sewer.getValue("Height")
+		W 		= sewer.getValue("Width")
+		Shape 	= sewer.getValue("PIPESHAPE")
+		U_el	= sewer.getValue("UpStreamElevation")
+		D_el	= sewer.getValue("DownStreamElevation")
+		id 		= sewer.getValue("OBJECTID")
+		TC		= sewer.getValue("TC_Path")
+		ss		= sewer.getValue("StudySewer")
+		tag 	= sewer.getValue("Tag")
 
 		#boolean flags for symbology
 		missingData = False #boolean representing whether the pipe is missing important data
@@ -295,7 +310,7 @@ def runCalcs (study_pipes_cursor):
 		minSlopeAssumed = False
 
 		#check if slope is Null, try to compute a slope or asssume a minimum value
-		arcpy.AddMessage("checking  pipe "  + str(id))
+		arcpy.AddMessage("checking  sewer "  + str(id))
 		if S_orig is None:
 			if (U_el is not None) and (D_el is not None):
 				S = ( (U_el - D_el) / L ) * 100.0 #percent
@@ -304,18 +319,18 @@ def runCalcs (study_pipes_cursor):
 				arcpy.AddMessage("calculated slope = " + str(S) + ", ID = " + str(id))
 			elif S is not None and S != default_min_slope:
 			 	arcpy.AddMessage("Manual slope input on {}".format(id))
-			 	pipe.setValue("Hyd_Study_Notes", 'Manual slope input')
+			 	sewer.setValue("Hyd_Study_Notes", 'Manual slope input')
 				print 'type of thing {}'.format(type(S))
 			 	S = float(S)
 			else:
 				S = default_min_slope
-				pipe.setValue("Hyd_Study_Notes", "Minimum " + str(S) +  " slope assumed")
+				sewer.setValue("Hyd_Study_Notes", "Minimum " + str(S) +  " slope assumed")
 				minSlopeAssumed = True
 				arcpy.AddMessage("\t min slope assumed = " + str(S)  + ", ID = " + str(id))
 
 		else: S = S_orig #use DataConv slope if provided
 
-		pipe.setValue("Slope_Used", round(float(S), 2))
+		sewer.setValue("Slope_Used", round(float(S), 2))
 
 
 
@@ -326,11 +341,11 @@ def runCalcs (study_pipes_cursor):
 			try:
 				#compute pipe velocity
 				V = (1.49/ getMannings(Shape, D)) * math.pow(hydraulicRadius(Shape, D, H, W), 0.667) * math.pow(float(S)/100.0, 0.5)
-				pipe.setValue("Velocity", round(float(V), 2))
+				sewer.setValue("Velocity", round(float(V), 2))
 
 				#compute the capacity
 				Qmax = xarea(Shape, D, H, W) * V
-				pipe.setValue("Capacity", round(float(Qmax), 2))
+				sewer.setValue("Capacity", round(float(Qmax), 2))
 
 				#compute travel time in the pipe segment, be conservative if a min slope was used
 				if (minSlopeAssumed):
@@ -339,20 +354,20 @@ def runCalcs (study_pipes_cursor):
 				else:
 					T = (L / V) / 60 # minutes
 
-				pipe.setValue("TravelTime_min", round(float(T), 3)) #arcpy.AddMessage("time = " + str(T))
+				sewer.setValue("TravelTime_min", round(float(T), 3)) #arcpy.AddMessage("time = " + str(T))
 
 			except TypeError:
-				arcpy.AddWarning("Type error on pipe " + str(pipe.getValue("OBJECTID")))
+				arcpy.AddWarning("Type error on pipe " + str(sewer.getValue("OBJECTID")))
 
 		else:
 			missingData = True #not enough data for calcs
-			arcpy.AddMessage("skipped pipe " + str(pipe.getValue("OBJECTID")))
+			arcpy.AddMessage("skipped pipe " + str(sewer.getValue("OBJECTID")))
 
 
 		#apply symbology tag
 		theflag = determineSymbologyTag(missingData, isTC, isSS, calculatedSlope, minSlopeAssumed)
-		pipe.setValue("Tag", str(theflag))
+		sewer.setValue("Tag", str(theflag))
 
-		study_pipes_cursor.updateRow(pipe)
+		study_sewers_cursor.updateRow(sewer)
 
-	del study_pipes_cursor
+	del study_sewers_cursor
