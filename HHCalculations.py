@@ -3,11 +3,10 @@
 import arcpy
 from arcpy import env
 import math
-import Working_RC_Calcs
 import ssha_tools
 import utils
 import os
-import hhcalcs
+
 
 # ====================
 # HYDRUALIC EQUATIONS

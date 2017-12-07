@@ -5,6 +5,7 @@ import HHCalculations
 import utils
 import os
 
+default_env = "C:/Users/christine.brown/Desktop/SSHA/Small_Sewer_Capacity/Default.gdb"
 
 def trace_upstream(startid, table=r"Small_Sewer_Drainage_Areas",
 					return_field = 'StudyArea_ID',
@@ -56,14 +57,18 @@ def updateDAIndex (project_id, study_areas, study_area_indices):
 	"""
 
 	#check if index already exists, delete if necessary
-	index_layer = os.path.join(study_area_indices, "DA_" + project_id)
-	if arcpy.Exists(index_layer):
+	index_featureclass = os.path.join(default_env, "/DA_" + project_id)
+	if arcpy.Exists(index_featureclass):
 		arcpy.AddMessage('{} index exists, overwriting...'.format(project_id))
-		arcpy.Delete_management(index_layer)
+		arcpy.Delete_management(index_featureclass)
 
 	where = "Project_ID = " + project_id
 	layer_name = "DA_" + project_id
 
-	arcpy.MakeFeatureLayer_management(study_areas, index_layer, where_clause = where)
-	arcpy.FeatureClassToFeatureClass_conversion(index_layer, study_area_indices, layer_name)
-	arcpy.Delete_management(index_layer)
+	#arcpy.MakeFeatureLayer_management(study_areas, index_featureclass, where_clause = where)
+	#create feature class from small sewer drainage area and store temporarily in the default gdb
+	arcpy.FeatureClassToFeatureClass_conversion(study_areas, default_env, layer_name, where_clause = where)
+	#append temporary feature class to the DA_Master feature class
+	arcpy.Append_management(index_featureclass, study_area_indices, "TEST")
+	#delete the feature class in the default gdb
+	#arcpy.Delete_management(index_featureclass)
