@@ -1,7 +1,6 @@
 #hydraulic and hydrologic calculation tools
 
 import arcpy
-from arcpy import env
 import math
 import ssha_tools
 import utils

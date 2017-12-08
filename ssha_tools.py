@@ -1,12 +1,11 @@
 import arcpy
 import random
-import Working_RC_Calcs
 import HHCalculations
 import utils
 import os
 
-workspace = "C:/Users/christine.brown/Desktop/SSHA/Small_Sewer_Capacity/Default.gdb"
-arcpy.env.workspace = workspace
+# workspace = "C:/Users/christine.brown/Desktop/SSHA/Small_Sewer_Capacity/Default.gdb"
+# arcpy.env.workspace = workspace
 
 def trace_upstream(startid, table=r"Small_Sewer_Drainage_Areas",
 					return_field = 'StudyArea_ID',
@@ -56,10 +55,13 @@ def updateDAIndex (project_id, study_areas, study_area_indices):
 	feature class. This compainion feature class is used for Data Driven Pages
 	functionality.
 	"""
+	#Use scratchGDB environment to write intermediate data
+	tempData = arcpy.env.scratchGDB
+
+	#Set file path for temporary feature class in scratchGDB
+	index_featureclass = os.path.join(tempData, "DA_" + project_id)
 
 	#check if index already exists, delete if necessary
-	index_featureclass = os.path.join(workspace, "DA_" + project_id)
-
 	if arcpy.Exists(index_featureclass):
 		arcpy.AddMessage('{} index exists, overwriting...'.format(project_id))
 		arcpy.Delete_management(index_featureclass)
@@ -69,8 +71,8 @@ def updateDAIndex (project_id, study_areas, study_area_indices):
 
 	#arcpy.MakeFeatureLayer_management(study_areas, index_featureclass, where_clause = where)
 	#create feature class from small sewer drainage area and store temporarily in the default gdb
-	arcpy.FeatureClassToFeatureClass_conversion(study_areas, workspace, layer_name, where_clause = where)
+	arcpy.FeatureClassToFeatureClass_conversion(study_areas, tempData, layer_name, where_clause = where)
 	#append temporary feature class to the DA_Master feature class
 	arcpy.Append_management(index_featureclass, study_area_indices, "TEST")
 	#delete the feature class in the default gdb
-	arcpy.Delete_management(index_featureclass)
+	#arcpy.Delete_management(index_featureclass)
