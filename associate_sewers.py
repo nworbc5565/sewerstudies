@@ -20,6 +20,9 @@ def associate_sewers_to_area(project_id, from_sewers, study_sewers, study_areas)
     #uniqs = str(tuple(unique_values(study_sewers, "StudyArea_ID"))).replace("u", "")
 	uniqs = utils.unique_values(study_sewers, "StudyArea_ID")
 
+	#check to ensure that there are no pipes with StudyArea_ID = <Null>
+	if 'None' in uniqs:
+		arcpy.AddWarning("Sewer in StudiedSewers where StudyArea_ID is Null!")
 	#create random names for temporary DA and sewer layers
 	DAs_temp = "DA_" + utils.random_alphanumeric()
 	sewers = "sewers_" + utils.random_alphanumeric()
