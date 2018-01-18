@@ -59,20 +59,26 @@ def updateDAIndex (project_id, study_areas, study_area_indices):
 	tempData = arcpy.env.scratchGDB
 
 	#Set file path for temporary feature class in scratchGDB
-	index_featureclass = os.path.join(tempData, "DA_" + project_id)
+	index_featureclass_path = os.path.join(tempData, "DA_" + project_id)
 
 	#check if index already exists, delete if necessary
-	if arcpy.Exists(index_featureclass):
+	if arcpy.Exists(index_featureclass_path):
 		arcpy.AddMessage('{} index exists, overwriting...'.format(project_id))
-		arcpy.Delete_management(index_featureclass)
+		arcpy.Delete_management(index_featureclass_path)
 
 	where = "Project_ID = " + project_id
 	layer_name = "DA_" + project_id
 
-	#arcpy.MakeFeatureLayer_management(study_areas, index_featureclass, where_clause = where)
 	#create feature class from small sewer drainage area and store temporarily in the default gdb
-	arcpy.FeatureClassToFeatureClass_conversion(study_areas, tempData, layer_name, where_clause = where)
+	index_featureclass = arcpy.FeatureClassToFeatureClass_conversion(study_areas, tempData, layer_name, where_clause = where)
+
+	#Attempting to match schemas
+	#utils.match_schemas(study_area_indices, index_featureclass, delete_fields=True)
+
+	#Manually deleting dropFields causing issues with schema match. Temp fix need to go back and fix properly.
+	dropFields = ["SHAPE_STArea__", "SHAPE_STLength__"]
+	arcpy.DeleteField_management(index_featureclass, dropFields)
 	#append temporary feature class to the DA_Master feature class
 	arcpy.Append_management(index_featureclass, study_area_indices, "TEST")
 	#delete the feature class in the default gdb
-	#arcpy.Delete_management(index_featureclass)
+	arcpy.Delete_management(index_featureclass)

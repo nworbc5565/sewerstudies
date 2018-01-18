@@ -48,7 +48,7 @@ def match_schemas(matchToTable, editSchemaTable, delete_fields = True):
 		#create list of field names to be added
 		if fieldname not in editFieldsNames:
 			addFieldsList.append(fieldname)
-			arcpy.AddMessage("Add: {}".format(fieldname))
+			#arcpy.AddMessage("Add: {}".format(fieldname))
 
 	#Temp workarond. Remove geometry specific field. Weird bug causes crash when trying to execute arcpy.AddField_management
 	addFieldsList.remove('Shape.STLength()')
@@ -56,7 +56,7 @@ def match_schemas(matchToTable, editSchemaTable, delete_fields = True):
 	for field in arcpy.ListFields(matchToTable):
 		print (field.name + " " + field.type.upper())
 		if field.name in addFieldsList:
-			arcpy.AddMessage("Adding {} + {}".format(field.name, field.type.upper))
+			#arcpy.AddMessage("Adding {} + {}".format(field.name, field.type.upper))
 			arcpy.AddField_management(in_table = editSchemaTable, field_name = field.name, field_type = field.type.upper(), field_length = field.length)
 
 

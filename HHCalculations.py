@@ -255,7 +255,7 @@ def run_hydrology(project_id, study_sewers, study_areas, study_area_id=None):
 		C = drainage_area.getValue("Runoff_Coefficient")
 		#C = Working_RC_Calcs.getC(study_area_id, project_id)
 		print C
-		A = drainage_area.getValue("SHAPE_Area") / 43560
+		A = drainage_area.getValue("SHAPE.STArea()") / 43560
 		I = 116 / ( tc + 17)
 		peak_runoff =  C * I * A
 
