@@ -56,7 +56,8 @@ def updateDAIndex (study_areas, study_area_indices, project_id ="", studyarea_id
 	functionality.
 	"""
 	#Use scratchGDB environment to write intermediate data
-	tempData = arcpy.env.scratchGDB
+	tempData = arcpy.env.workspace
+	arcpy.AddMessage("tempData = {}".format(tempData))
 
 	#Setting default value for duplicate records count in Master DA Index
 	dupRecordCount = 0
@@ -79,7 +80,7 @@ def updateDAIndex (study_areas, study_area_indices, project_id ="", studyarea_id
 		arcpy.AddMessage("Updating DA Master Index where: {}".format(where))
 		layer_name = "DA_" + project_id
 	else:
-		arcpy.AddMessage("Must specific Project or Study Area ID!")
+		arcpy.AddMessage("Must specify Project or Study Area ID!")
 
 	#Set file path for temporary feature class in scratchGDB
 	index_featureclass_path = os.path.join(tempData, layer_name)
