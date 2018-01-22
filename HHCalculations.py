@@ -289,7 +289,7 @@ def run_hydrology(project_id, study_sewers, study_areas, study_area_id=None):
 def run_hydraulics(project_id, study_sewers, study_area_id=None):
 
 	where = utils.where_clause_from_user_input(project_id, study_area_id)
-	arcpy.AddMessage("wherey = {}".format(where))
+	arcpy.AddMessage("where = {}".format(where))
 	study_sewers_cursor = arcpy.UpdateCursor(study_sewers, where_clause = where)
 
 	for sewer in study_sewers_cursor:
@@ -308,6 +308,7 @@ def run_hydraulics(project_id, study_sewers, study_area_id=None):
 		TC		= sewer.getValue("TC_Path")
 		ss		= sewer.getValue("StudySewer")
 		tag 	= sewer.getValue("Tag")
+		H_notes = sewer.getValue("Hyd_Study_Notes")
 
 		#boolean flags for symbology
 		missingData = False #boolean representing whether the pipe is missing important data
@@ -316,19 +317,20 @@ def run_hydraulics(project_id, study_sewers, study_area_id=None):
 		calculatedSlope = False
 		minSlopeAssumed = False
 
+		#List of potential manual slope input justifications
+		manualSlopeInputs = ['Manual slope input: Design/return plans','Manual slope input: Ground surface terrain', 'Manual slope input: Minimum design velocity', 'Manual slope input: Length-averaged slope']
+
 		#check if slope is Null, try to compute a slope or asssume a minimum value
 		arcpy.AddMessage("checking  sewer "  + str(id))
-		if S_orig is None:
+		if S is not None and H_notes in manualSlopeInputs:
+		 	arcpy.AddMessage("Manual slope input on {}: {}".format(id, type(S)))
+		 	S = float(S)
+		elif S_orig is None:
 			if (U_el is not None) and (D_el is not None):
 				S = ( (U_el - D_el) / L ) * 100.0 #percent
 				sewer.setValue("Hyd_Study_Notes", "Autocalculated Slope")
 				calculatedSlope = True
 				arcpy.AddMessage("calculated slope = " + str(S) + ", ID = " + str(id))
-			elif S is not None and S != default_min_slope:
-			 	arcpy.AddMessage("Manual slope input on {}".format(id))
-			 	sewer.setValue("Hyd_Study_Notes", 'Manual slope input')
-				print 'type of thing {}'.format(type(S))
-			 	S = float(S)
 			else:
 				S = default_min_slope
 				sewer.setValue("Hyd_Study_Notes", "Minimum " + str(S) +  " slope assumed")
@@ -338,8 +340,6 @@ def run_hydraulics(project_id, study_sewers, study_area_id=None):
 		else: S = S_orig #use DataConv slope if provided
 
 		sewer.setValue("Slope_Used", round(float(S), 2))
-
-
 
 		# check if any required data points are null, and skip accordingly
 		#logic -> if (diameter or height exists) and (if Shape is not UNK), then enough data for calcs

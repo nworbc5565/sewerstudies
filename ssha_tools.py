@@ -47,7 +47,7 @@ def trace_upstream(startid, table=r"Small_Sewer_Drainage_Areas",
 
 	return upstream_ids
 
-def updateDAIndex (project_id, study_areas, study_area_indices):
+def updateDAIndex (study_areas, study_area_indices, project_id ="", studyarea_id = ""):
 
 	"""
 	update the companion "Drainage Area Index" for the current project id. This
@@ -58,16 +58,37 @@ def updateDAIndex (project_id, study_areas, study_area_indices):
 	#Use scratchGDB environment to write intermediate data
 	tempData = arcpy.env.scratchGDB
 
-	#Set file path for temporary feature class in scratchGDB
-	index_featureclass_path = os.path.join(tempData, "DA_" + project_id)
+	#Setting default value for duplicate records count in Master DA Index
+	dupRecordCount = 0
 
 	#check if index already exists, delete if necessary
-	if arcpy.Exists(index_featureclass_path):
-		arcpy.AddMessage('{} index exists, overwriting...'.format(project_id))
-		arcpy.Delete_management(index_featureclass_path)
+	# if arcpy.Exists(index_featureclass_path):
+	# 	arcpy.AddMessage('{} index exists, overwriting...'.format(project_id))
+	# 	arcpy.Delete_management(index_featureclass_path)
 
-	where = "Project_ID = " + project_id
-	layer_name = "DA_" + project_id
+	#check study_area_indices for existing records for each study area ID
+
+	if studyarea_id != "":
+		field_name = ["StudyArea_ID"]
+		where = "StudyArea_ID='{}'".format(studyarea_id)
+		arcpy.AddMessage("Updating DA Master Index where: {}".format(where))
+		layer_name = "DA_" + studyarea_id
+	elif project_id != "":
+		field_name = ["Project_ID"]
+		where = "Project_ID={}".format(project_id)
+		arcpy.AddMessage("Updating DA Master Index where: {}".format(where))
+		layer_name = "DA_" + project_id
+	else:
+		arcpy.AddMessage("Must specific Project or Study Area ID!")
+
+	#Set file path for temporary feature class in scratchGDB
+	index_featureclass_path = os.path.join(tempData, layer_name)
+
+	with arcpy.da.UpdateCursor(study_area_indices, field_name, where_clause=where) as daindices_cursor:
+		for row in daindices_cursor:
+			dupRecordCount = dupRecordCount + 1
+			daindices_cursor.deleteRow()
+		arcpy.AddMessage("Total duplicate records deleted = {}".format(dupRecordCount))
 
 	#create feature class from small sewer drainage area and store temporarily in the default gdb
 	index_featureclass = arcpy.FeatureClassToFeatureClass_conversion(study_areas, tempData, layer_name, where_clause = where)
@@ -78,6 +99,7 @@ def updateDAIndex (project_id, study_areas, study_area_indices):
 	#Manually deleting dropFields causing issues with schema match. Temp fix need to go back and fix properly.
 	dropFields = ["SHAPE_STArea__", "SHAPE_STLength__"]
 	arcpy.DeleteField_management(index_featureclass, dropFields)
+
 	#append temporary feature class to the DA_Master feature class
 	arcpy.Append_management(index_featureclass, study_area_indices, "TEST")
 	#delete the feature class in the default gdb
