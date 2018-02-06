@@ -318,7 +318,7 @@ def run_hydraulics(project_id, study_sewers, study_area_id=None):
 		minSlopeAssumed = False
 
 		#List of potential manual slope input justifications
-		manualSlopeInputs = ['Manual slope input: Design/return plans','Manual slope input: Ground surface terrain', 'Manual slope input: Minimum design velocity', 'Manual slope input: Length-averaged slope']
+		manualSlopeInputs = ['Manual slope input: Design/return plans','Manual slope input: Ground surface terrain', 'Manual slope input: Minimum design velocity', 'Manual slope input: Length-averaged slope', 'Manual slope input: Invert elevation calc']
 
 		#check if slope is Null, try to compute a slope or asssume a minimum value
 		arcpy.AddMessage("checking  sewer "  + str(id))

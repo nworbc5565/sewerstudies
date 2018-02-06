@@ -99,6 +99,7 @@ def updateDAIndex (study_areas, study_area_indices, project_id ="", studyarea_id
 
 	#Manually deleting dropFields causing issues with schema match. Temp fix need to go back and fix properly.
 	dropFields = ["SHAPE_STArea__", "SHAPE_STLength__"]
+	#dropFields = ["Shape_Length", "Shape_Area"]
 	arcpy.DeleteField_management(index_featureclass, dropFields)
 
 	#append temporary feature class to the DA_Master feature class
